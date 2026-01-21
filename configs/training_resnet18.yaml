@@ -1,0 +1,11 @@
+# Training Configuration (ResNet18 Baseline)
+experiment_name: "experiment2_resnet18"
+description: "Vanilla ResNet18 baseline with naive MSE loss"
+
+seed: 42
+epochs: 100
+learning_rate: 0.001
+optimizer: "adam"
+loss_function: "mse"
+log_interval: 10
+# Paths are set dynamically by trainer based on experiment_name

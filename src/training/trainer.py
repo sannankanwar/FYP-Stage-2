@@ -4,6 +4,7 @@ import torch.optim as optim
 import os
 import time
 from tqdm import tqdm
+from src.training.loss import PhysicsInformedLoss
 
 class Trainer:
     def __init__(self, config, model, train_loader, val_loader=None):
@@ -20,15 +21,43 @@ class Trainer:
         # Setup Optimizer and Loss
         lr = config.get("learning_rate", 1e-3)
         self.optimizer = optim.Adam(model.parameters(), lr=lr)
-        self.criterion = nn.MSELoss()
+        
+        loss_name = config.get("loss_function", "mse")
+        if loss_name == "physics_informed":
+            print("Using PhysicsInformedLoss")
+            # You might want to pass lambdas from config here
+            self.criterion = PhysicsInformedLoss()
+        else:
+            print(f"Using Standard {loss_name.upper()} Loss")
+            self.criterion = nn.MSELoss()
         
         # Training State
         self.start_epoch = 0
         self.best_val_loss = float('inf')
         
         # Paths
-        self.checkpoint_dir = config.get("checkpoint_dir", "outputs/checkpoints")
+        experiment_name = config.get("experiment_name")
+        if experiment_name:
+            self.experiment_dir = os.path.join("outputs", experiment_name)
+            self.checkpoint_dir = os.path.join(self.experiment_dir, "checkpoints")
+            self.log_dir = os.path.join(self.experiment_dir, "logs")
+            print(f"Experiment Output Directory: {self.experiment_dir}")
+            
+            # Save experiment info if provided
+            os.makedirs(self.experiment_dir, exist_ok=True)
+            description = config.get("description", "No description provided.")
+            with open(os.path.join(self.experiment_dir, "experiment_info.md"), "w") as f:
+                f.write(f"# Experiment: {experiment_name}\n\n")
+                f.write(f"**Date**: {time.strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+                f.write(f"## Description\n{description}\n")
+        else:
+            # Fallback to old behavior or config provided paths
+            self.checkpoint_dir = config.get("checkpoint_dir", "outputs/checkpoints")
+            self.log_dir = config.get("log_dir", "outputs/logs")
+
         os.makedirs(self.checkpoint_dir, exist_ok=True)
+        # Ensure log dir exists too if we were to actully use file logging (Currently just print)
+        os.makedirs(self.log_dir, exist_ok=True)
         
     def train(self):
         epochs = self.config.get("epochs", 10)
@@ -71,7 +100,14 @@ class Trainer:
             
             self.optimizer.zero_grad()
             output = self.model(data)
-            loss = self.criterion(output, target)
+            
+            # Handle different loss signatures
+            if isinstance(self.criterion, PhysicsInformedLoss):
+                # PhysicsLoss needs (pred, target, input_images)
+                loss, metrics = self.criterion(output, target, data)
+            else:
+                loss = self.criterion(output, target)
+                
             loss.backward()
             self.optimizer.step()
             
@@ -90,7 +126,12 @@ class Trainer:
             for data, target in self.val_loader:
                 data, target = data.to(self.device), target.to(self.device)
                 output = self.model(data)
-                loss = self.criterion(output, target)
+                
+                if isinstance(self.criterion, PhysicsInformedLoss):
+                    loss, _ = self.criterion(output, target, data)
+                else:
+                    loss = self.criterion(output, target)
+                
                 total_loss += loss.item()
                 
         return total_loss / num_batches
@@ -105,3 +146,4 @@ class Trainer:
             'config': self.config
         }
         torch.save(checkpoint, path)
+

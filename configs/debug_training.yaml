@@ -3,7 +3,7 @@ seed: 42
 epochs: 1
 learning_rate: 0.001
 optimizer: "adam"
-loss_function: "mse"
+loss_function: "physics_informed"
 log_interval: 1
 checkpoint_dir: "outputs/checkpoints_debug"
 log_dir: "outputs/logs_debug"

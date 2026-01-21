@@ -1,4 +1,7 @@
 # Training Configuration
+experiment_name: null # e.g. "experiment1"
+description: ""
+
 seed: 42
 epochs: 100
 learning_rate: 0.001

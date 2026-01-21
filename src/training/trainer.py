@@ -20,7 +20,27 @@ class Trainer:
         
         # Setup Optimizer and Loss
         lr = config.get("learning_rate", 1e-3)
-        self.optimizer = optim.Adam(model.parameters(), lr=lr)
+        opt_name = config.get("optimizer", "adam").lower()
+        
+        if opt_name == "muon":
+            from src.training.optimizers import Muon
+            print("Using Muon Optimizer")
+            # Muon defaults: lr=0.02, usually higher than Adam
+            self.optimizer = Muon(model.parameters(), lr=lr) 
+        else:
+            print("Using Adam Optimizer")
+            self.optimizer = optim.Adam(model.parameters(), lr=lr)
+            
+        # Setup Scheduler
+        self.scheduler = None
+        scheduler_name = config.get("scheduler", None)
+        if scheduler_name == "plateau":
+            print("Using ReduceLROnPlateau Scheduler")
+            patience = config.get("scheduler_patience", 10)
+            factor = config.get("scheduler_factor", 0.1)
+            self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+                self.optimizer, mode='min', patience=patience, factor=factor
+            )
         
         loss_name = config.get("loss_function", "mse")
         if loss_name == "physics_informed":
@@ -134,7 +154,13 @@ class Trainer:
                 
                 total_loss += loss.item()
                 
-        return total_loss / num_batches
+        avg_val_loss = total_loss / num_batches
+        
+        # Step Scheduler
+        if self.scheduler:
+            self.scheduler.step(avg_val_loss)
+            
+        return avg_val_loss
 
     def _save_checkpoint(self, epoch, val_loss, name):
         path = os.path.join(self.checkpoint_dir, name)

@@ -1,0 +1,12 @@
+experiment_name: "experiment3_spectral_plateau"
+description: "Spectral model with ReduceLROnPlateau scheduler"
+seed: 42
+epochs: 100
+learning_rate: 0.001
+optimizer: "adam"
+scheduler: "plateau"
+scheduler_patience: 15
+scheduler_factor: 0.5
+loss_function: "mse"
+log_interval: 10
+# Paths are set dynamically

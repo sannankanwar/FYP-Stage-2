@@ -20,21 +20,36 @@ def get_model(config):
     input_channels = config.get("input_channels", 2)
     output_dim = config.get("output_dim", 3)
     
+    
     if name == "spectral_resnet":
         modes = config.get("modes", 16)
-        # SpectralResNet takes (in_channels, modes)
-        # Output dim adjustment might be needed if not standard
-        # But looking at hybrid.py, it hardcodes the FC to output 3.
-        # FUTURE TODO: Make SpectralResNet output_dim configurable.
-        return SpectralResNet(in_channels=input_channels, modes=modes)
-        
+        model = SpectralResNet(in_channels=input_channels, modes=modes)
     elif name == "resnet18":
-        # InverseMetalensModel(output_dim=3, input_channels=2)
-        return InverseMetalensModel(output_dim=output_dim, input_channels=input_channels)
-        
+        model = InverseMetalensModel(output_dim=output_dim, input_channels=input_channels)
     elif name == "wideresnet50":
-        # InverseMetalensWideResNet50(output_dim=3, input_channels=2)
-        return InverseMetalensWideResNet50(output_dim=output_dim, input_channels=input_channels)
-        
+        model = InverseMetalensWideResNet50(output_dim=output_dim, input_channels=input_channels)
     else:
         raise ValueError(f"Unknown model name: {name}. Available: spectral_resnet, resnet18, wideresnet50")
+
+    # Activation Replacement Logic
+    activation_name = config.get("activation")
+    if activation_name:
+        import torch.nn as nn
+        from src.utils.model_utils import replace_activation
+        
+        act_map = {
+            "silu": nn.SiLU,
+            "gelu": nn.GELU,
+            "tanh": nn.Tanh,
+            "sigmoid": nn.Sigmoid,
+            "leaky_relu": nn.LeakyReLU
+        }
+        
+        new_act = act_map.get(activation_name.lower())
+        if new_act:
+            print(f"Replacing all ReLU with {new_act.__name__}")
+            replace_activation(model, nn.ReLU, new_act)
+        else:
+            print(f"Warning: Unknown activation {activation_name}, skipping replacement.")
+            
+    return model

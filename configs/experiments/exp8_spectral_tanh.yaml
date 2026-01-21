@@ -1,0 +1,10 @@
+experiment_name: "experiment8_spectral_tanh"
+description: "Spectral model with Tanh activations for max smoothness"
+seed: 42
+epochs: 100
+learning_rate: 0.001
+optimizer: "adam"
+scheduler: "plateau"
+activation: "tanh" # Replaces ReLU
+loss_function: "mse"
+log_interval: 10

@@ -2,15 +2,14 @@ import re
 import argparse
 import matplotlib.pyplot as plt
 import sys
+import os
 
 def parse_log_file(log_path):
     epochs = []
     train_losses = []
     val_losses = []
 
-    # Regex to extract data from lines like:
-    # Epoch 94/100 | Time: 14.10s | Train Loss: 1769.868557 | Val Loss: 949.177473
-    # It constructs a pattern that looks for 'Epoch', integer group, float group for Train Loss, float group for Val Loss
+    # Regex to extract data
     pattern = re.compile(r"Epoch\s+(\d+)/\d+\s+\|.*Train Loss:\s+([\d\.e\+\-]+)\s+\|.*Val Loss:\s+([\d\.e\+\-]+)")
 
     try:
@@ -28,45 +27,54 @@ def parse_log_file(log_path):
                     
     except FileNotFoundError:
         print(f"Error: Log file not found at {log_path}")
-        sys.exit(1)
+        return None, None, None
 
     return epochs, train_losses, val_losses
 
-def plot_losses(epochs, train_losses, val_losses, output_path):
+def plot_losses(data_list, output_path):
     plt.figure(figsize=(10, 6))
     
-    plt.plot(epochs, train_losses, label='Train Loss', marker='o', markersize=4)
-    plt.plot(epochs, val_losses, label='Validation Loss', marker='s', markersize=4)
+    colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k']
     
-    plt.title('Training and Validation Loss Over Epochs')
+    for i, (name, epochs, train_losses, val_losses) in enumerate(data_list):
+        color = colors[i % len(colors)]
+        plt.plot(epochs, train_losses, label=f'{name} (Train)', linestyle='--', color=color, alpha=0.7)
+        plt.plot(epochs, val_losses, label=f'{name} (Val)', linestyle='-', marker='o', markersize=3, color=color)
+    
+    plt.title('Training and Validation Loss Comparison')
     plt.xlabel('Epoch')
     plt.ylabel('Loss (MSE)')
     plt.grid(True, which="both", ls="-", alpha=0.5)
     plt.legend()
-    
-    # Use log scale if standard deviation of loss is huge (optional, but good for losses starting high)
-    # plt.yscale('log')
     
     plt.tight_layout()
     plt.savefig(output_path)
     print(f"Plot saved to {output_path}")
 
 def main():
-    parser = argparse.ArgumentParser(description="Plot training and validation loss from log file.")
-    parser.add_argument("log_file", nargs='?', default="output.log", help="Path to the log file (default: output.log)")
+    parser = argparse.ArgumentParser(description="Plot training and validation loss from log file(s).")
+    parser.add_argument("log_files", nargs='+', help="Path to the log file(s). You can specify multiple files to compare.")
     parser.add_argument("--output", "-o", default="loss_plot.png", help="Path to save the plot image (default: loss_plot.png)")
     
     args = parser.parse_args()
     
-    print(f"Reading log file: {args.log_file}")
-    epochs, train_losses, val_losses = parse_log_file(args.log_file)
+    data_list = []
     
-    if not epochs:
-        print("No valid epoch lines found in the log file.")
+    for log_file in args.log_files:
+        print(f"Reading: {log_file}")
+        epochs, train, val = parse_log_file(log_file)
+        if epochs:
+            # Use filename as label key, remove extension
+            name = os.path.splitext(os.path.basename(log_file))[0]
+            data_list.append((name, epochs, train, val))
+        else:
+            print(f"Skipping {log_file} (no data found)")
+            
+    if not data_list:
+        print("No valid data found to plot.")
         return
         
-    print(f"Found {len(epochs)} epochs.")
-    plot_losses(epochs, train_losses, val_losses, args.output)
+    plot_losses(data_list, args.output)
 
 if __name__ == "__main__":
     main()

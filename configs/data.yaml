@@ -1,0 +1,24 @@
+# Data Configuration
+function_name: "metalens_hyperbolic"
+resolution: 1024
+range_min: -500
+range_max: 500
+num_samples: 10000
+train_split: 0.8
+val_split: 0.1
+test_split: 0.1
+batch_size: 32
+num_workers: 4
+
+# Evaluation Tiers
+eval:
+  fovs: [10.0, 40.0, 80.0]
+  fast:
+    xc_count: 10
+    yc_count: 10
+  slow:
+    xc_count: 25
+    yc_count: 25
+  final:
+    xc_count: 50
+    yc_count: 50

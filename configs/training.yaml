@@ -1,0 +1,9 @@
+# Training Configuration
+seed: 42
+epochs: 100
+learning_rate: 0.001
+optimizer: "adam"
+loss_function: "mse"
+log_interval: 10
+checkpoint_dir: "outputs/checkpoints"
+log_dir: "outputs/logs"

@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "function_inverse"
+version = "0.1.0"
+description = "Deep Learning for Function Inverse Research"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "torch",
+    "numpy",
+    "matplotlib",
+    "pyyaml",
+    "pandas>=2.0.3",
+    "seaborn>=0.13.2",
+    "jupyter>=1.1.1",
+    "ipykernel>=6.29.5",
+    "tqdm>=4.67.1",
+    "torchvision>=0.20.1",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]

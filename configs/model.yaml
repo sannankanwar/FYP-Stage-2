@@ -1,0 +1,6 @@
+# Model Configuration
+name: "spectral_resnet"
+input_channels: 2    # cos/sin phase
+output_dim: 3        # xc, yc, fov
+modes: 16            # FFT modes to keep
+hidden_dims: [64, 64, 64] # Legacy (optional)

@@ -1,0 +1,5 @@
+# Model Configuration: ResNet18 Baseline
+name: "resnet18"
+input_channels: 2    # cos/sin phase
+output_dim: 3        # xc, yc, fov
+# modes: 16 (Not used for ResNet18)

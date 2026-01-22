@@ -11,6 +11,7 @@ from tqdm import tqdm
 # Ensure src is importable
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
+from src.utils.config import load_config
 from src.models.factory import get_model
 from data.loaders.simulation import generate_grid_dataset
 from src.utils.model_utils import replace_activation
@@ -169,6 +170,23 @@ def evaluate_grid(checkpoint_path, output_dir, device="cpu", steps=25):
     model.to(device)
     model.eval()
 
+    # If resolution is missing in config, try to check configs/data.yaml or default to 1024 (project default)
+    resolution = config.get("resolution")
+    if not resolution:
+        # Try loading data.yaml
+        data_yaml_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "configs", "data.yaml")
+        if os.path.exists(data_yaml_path):
+             try:
+                 data_conf = load_config(data_yaml_path)
+                 resolution = data_conf.get("resolution", 1024)
+                 print(f"Loaded resolution {resolution} from {data_yaml_path}")
+             except:
+                 resolution = 1024
+        else:
+            resolution = 1024
+            
+    print(f"Using Model Resolution: {resolution}x{resolution}")
+
     # 2. Generate Grid Dataset
     print(f"Generating Evaluation Grid ({steps}x{steps})...")
     # Define range relative to what we trained on? Or standard [-500, 500].
@@ -183,7 +201,7 @@ def evaluate_grid(checkpoint_path, output_dir, device="cpu", steps=25):
         fov=fixed_fov,
         xc_range=xc_range,
         yc_range=yc_range,
-        N=config.get("resolution", 256)
+        N=resolution
     )
     
     # Initialize Normalizer if needed

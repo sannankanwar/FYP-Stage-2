@@ -5,6 +5,14 @@ from torch.utils.data import DataLoader, TensorDataset
 from src.models.factory import get_model
 from src.training.trainer import Trainer
 
+# Dummy dataset that mimics OnTheFlyDataset attributes
+class MockDataset(TensorDataset):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.xc_range = (-10, 10)
+        self.yc_range = (-10, 10)
+        self.fov_range = (0, 5)
+
 def test_activation_replacement():
     print("\n--- Testing Activation Replacement ---")
     config = {
@@ -57,6 +65,7 @@ def test_muon_and_scheduler():
     dataset = TensorDataset(x, y)
     loader = DataLoader(dataset, batch_size=2)
     
+    # Since config standard is False, this works fine with TensorDataset
     trainer = Trainer(config, model, loader, loader)
     
     # Check Optimizer type
@@ -82,6 +91,43 @@ def test_muon_and_scheduler():
         traceback.print_exc()
         exit(1)
 
+def test_standardization():
+    print("\n--- Testing Standardization ---")
+    config = {
+        "name": "spectral_resnet",
+        "loss_function": "mse",
+        "epochs": 1,
+        "modes": 2,
+        "standardize_outputs": True,
+        "checkpoint_dir": "tests/temp_outputs_std",
+        "log_dir": "tests/temp_outputs_std"
+    }
+    
+    model = get_model(config)
+    
+    # Dummy Data with MockDataset
+    x = torch.randn(4, 2, 64, 64)
+    y = torch.randn(4, 3)
+    dataset = MockDataset(x, y)
+    loader = DataLoader(dataset, batch_size=2)
+    
+    trainer = Trainer(config, model, loader, loader)
+    
+    if trainer.normalizer is None:
+        print("FAILURE: Normalizer not initialized.")
+        exit(1)
+        
+    print("Running 1 epoch with Standardization...")
+    try:
+        trainer.train()
+        print("SUCCESS: Standardization training loop completed.")
+    except Exception as e:
+        print(f"FAILURE: Standardization test crashed: {e}")
+        import traceback
+        traceback.print_exc()
+        exit(1)
+
 if __name__ == "__main__":
     test_activation_replacement()
     test_muon_and_scheduler()
+    test_standardization()

@@ -10,12 +10,14 @@ class PhysicsInformedLoss(nn.Module):
     2. Physics Residual Loss: MSE(Forward(output_params), input_image)
     """
     def __init__(self, lambda_param=1.0, lambda_physics=0.1, 
-                 fixed_focal_length=100.0, fixed_wavelength=0.532):
+                 fixed_focal_length=100.0, fixed_wavelength=0.532, normalizer=None):
         super().__init__()
         self.lambda_param = lambda_param
         self.lambda_physics = lambda_physics
         self.fixed_focal_length = fixed_focal_length
         self.fixed_wavelength = fixed_wavelength
+        self.fixed_wavelength = fixed_wavelength
+        self.normalizer = normalizer
         self.mse = nn.MSELoss()
 
     def forward(self, pred_params, true_params, input_images):
@@ -26,16 +28,27 @@ class PhysicsInformedLoss(nn.Module):
             input_images: (B, C, H, W) where C=2 (cos, sin)
         """
         # 1. Parameter Component
-        # If model predicts more params than we have labels for, just match the first 3
-        loss_param = self.mse(pred_params[:, :3], true_params[:, :3])
+        if self.normalizer:
+            # If standardization is on, the model outputs normalized values.
+            # We must normalize the target to match.
+            # normalizer.normalize returns a tensor (B, 3)
+            # We assume true_params (B, 3) matches the order expected by normalizer
+            true_params_norm = self.normalizer.normalize_tensor(true_params[:, :3])
+            loss_param = self.mse(pred_params[:, :3], true_params_norm)
+            
+            # For physics, we need real units
+            pred_params_phys = self.normalizer.denormalize_tensor(pred_params[:, :3])
+        else:
+            loss_param = self.mse(pred_params[:, :3], true_params[:, :3])
+            pred_params_phys = pred_params[:, :3]
 
         # 2. Physics Component (Differentiable Reconstruction)
         B, C, H, W = input_images.shape
         device = input_images.device
 
-        xc = pred_params[:, 0]
-        yc = pred_params[:, 1]
-        fov = pred_params[:, 2]
+        xc = pred_params_phys[:, 0]
+        yc = pred_params_phys[:, 1]
+        fov = pred_params_phys[:, 2]
 
         # Handle optional dynamic focal_length/wavelength if predicted
         if pred_params.shape[1] >= 5:

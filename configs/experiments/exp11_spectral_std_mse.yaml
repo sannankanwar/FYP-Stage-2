@@ -1,0 +1,18 @@
+experiment_name: "exp11_spectral_std_mse"
+description: "Spectral ResNet with Output Standardization and MSE Loss."
+model:
+  type: "spectral_resnet"
+  activation: "relu" # default
+
+data:
+  batch_size: 32
+  focal_length: 20e-6
+  wavelength: 633e-9
+
+training:
+  epochs: 50
+  learning_rate: 1e-3
+  optimizer: "adam"
+  scheduler: "plateau"
+  loss: "mse"
+  standardize_outputs: true

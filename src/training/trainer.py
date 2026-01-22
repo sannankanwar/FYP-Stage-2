@@ -5,6 +5,7 @@ import os
 import time
 from tqdm import tqdm
 from src.training.loss import PhysicsInformedLoss
+from src.utils.normalization import ParameterNormalizer
 
 class Trainer:
     def __init__(self, config, model, train_loader, val_loader=None):
@@ -42,11 +43,32 @@ class Trainer:
                 self.optimizer, mode='min', patience=patience, factor=factor
             )
         
+        # Setup Normalizer
+        self.normalizer = None
+        if config.get("standardize_outputs", False):
+            print("Using Output Standardization")
+            # Extract ranges from dataset
+            # We assume train_loader.dataset has these attributes (OnTheFlyDataset)
+            ds = train_loader.dataset
+            ranges = {
+                'xc': ds.xc_range,
+                'yc': ds.yc_range,
+                'fov': ds.fov_range
+            }
+            self.normalizer = ParameterNormalizer(ranges)
+            
+            # Send to device
+            for k in self.normalizer.means:
+                # simple scalar/float, but we might want them as tensors if used in heavy ops
+                # but normalizer handles scalar math mostly.
+                pass
+
         loss_name = config.get("loss_function", "mse")
         if loss_name == "physics_informed":
             print("Using PhysicsInformedLoss")
             # You might want to pass lambdas from config here
-            self.criterion = PhysicsInformedLoss()
+            # You might want to pass lambdas from config here
+            self.criterion = PhysicsInformedLoss(normalizer=self.normalizer)
         else:
             print(f"Using Standard {loss_name.upper()} Loss")
             self.criterion = nn.MSELoss()
@@ -126,7 +148,11 @@ class Trainer:
                 # PhysicsLoss needs (pred, target, input_images)
                 loss, metrics = self.criterion(output, target, data)
             else:
-                loss = self.criterion(output, target)
+                current_target = target
+                if self.normalizer:
+                    current_target = self.normalizer.normalize_tensor(target[:, :3])
+                
+                loss = self.criterion(output, current_target)
                 
             loss.backward()
             self.optimizer.step()
@@ -150,7 +176,10 @@ class Trainer:
                 if isinstance(self.criterion, PhysicsInformedLoss):
                     loss, _ = self.criterion(output, target, data)
                 else:
-                    loss = self.criterion(output, target)
+                    current_target = target
+                    if self.normalizer:
+                        current_target = self.normalizer.normalize_tensor(target[:, :3])
+                    loss = self.criterion(output, current_target)
                 
                 total_loss += loss.item()
                 

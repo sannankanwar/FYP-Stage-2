@@ -1,0 +1,18 @@
+experiment_name: "exp9_pinn_silu"
+description: "Spectral ResNet with SiLU activation and Physics-Informed Loss."
+model:
+  type: "spectral_resnet"
+  activation: "silu"
+
+data:
+  batch_size: 32
+  focal_length: 20e-6
+  wavelength: 633e-9
+
+training:
+  epochs: 50
+  learning_rate: 1e-3
+  optimizer: "adam"
+  scheduler: "plateau" # Use plateau for stability 
+  loss: "physics"      # PhysicsInformedLoss
+  physics_weight: 0.1  # Weight for the physics loss term

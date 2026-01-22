@@ -26,3 +26,7 @@ outputs/
 
 # VS Code
 .vscode/
+
+# Tests
+tests/temp_outputs/
+tests/temp_outputs_std/

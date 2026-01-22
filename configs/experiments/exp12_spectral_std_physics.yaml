@@ -1,0 +1,19 @@
+experiment_name: "exp12_spectral_std_physics"
+description: "Spectral ResNet with Output Standardization and Physics-Informed Loss."
+model:
+  type: "spectral_resnet"
+  activation: "relu"
+
+data:
+  batch_size: 32
+  focal_length: 20e-6
+  wavelength: 633e-9
+
+training:
+  epochs: 50
+  learning_rate: 1e-3
+  optimizer: "adam"
+  scheduler: "plateau"
+  loss: "physics"
+  physics_weight: 0.1
+  standardize_outputs: true

@@ -10,6 +10,12 @@ test_split: 0.1
 batch_size: 32
 num_workers: 4
 
+# Wavelength: 400nm to 700nm (Visible)
+wavelength_range: [400.0e-9, 700.0e-9]
+
+# Focal Length: 10um to 100um
+focal_length_range: [10.0e-6, 100.0e-6]
+
 # Evaluation Tiers
 eval:
   fovs: [10.0, 40.0, 80.0]

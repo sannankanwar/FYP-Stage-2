@@ -37,10 +37,18 @@ def visualize_sample(input_tensor, true_params, pred_params, loss, title, output
     plt.title(f"{title}\nLoss: {loss:.6f}")
     
     # Text info
-    info_text = (
-        f"TRUE: xc={true_params[0]:.2f}, yc={true_params[1]:.2f}, fov={true_params[2]:.2f}\n"
-        f"PRED: xc={pred_params[0]:.2f}, yc={pred_params[1]:.2f}, fov={pred_params[2]:.2f}"
-    )
+    if len(true_params) == 5:
+        info_text = (
+            f"TRUE: xc={true_params[0]:.2f}, yc={true_params[1]:.2f}, fov={true_params[2]:.2f}\n"
+            f"      wl={true_params[3]*1e9:.1f}nm, f={true_params[4]*1e6:.1f}um\n"
+            f"PRED: xc={pred_params[0]:.2f}, yc={pred_params[1]:.2f}, fov={pred_params[2]:.2f}\n"
+            f"      wl={pred_params[3]*1e9:.1f}nm, f={pred_params[4]*1e6:.1f}um"
+        )
+    else:
+        info_text = (
+            f"TRUE: xc={true_params[0]:.2f}, yc={true_params[1]:.2f}, fov={true_params[2]:.2f}\n"
+            f"PRED: xc={pred_params[0]:.2f}, yc={pred_params[1]:.2f}, fov={pred_params[2]:.2f}"
+        )
     plt.figtext(0.5, 0.05, info_text, ha="center", fontsize=12, bbox={"facecolor":"white", "alpha":0.8, "pad":5})
     
     plt.tight_layout()
@@ -52,8 +60,13 @@ def plot_scatter(y_true, y_pred, output_dir, title="Parameter Scatter Plots"):
     Plots True vs Predicted scatter plots for each parameter (xc, yc, fov).
     y_true, y_pred: (N, 3) arrays
     """
-    params = ['xc', 'yc', 'fov']
-    fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+    num_params = y_true.shape[1]
+    if num_params == 5:
+        params = ['xc', 'yc', 'fov', 'wavelength', 'focal_length']
+        fig, axes = plt.subplots(1, 5, figsize=(25, 5))
+    else:
+        params = ['xc', 'yc', 'fov']
+        fig, axes = plt.subplots(1, 3, figsize=(18, 5))
     
     for i, param in enumerate(params):
         ax = axes[i]
@@ -228,7 +241,9 @@ def evaluate_grid(checkpoint_path, output_dir, device="cpu", steps=25):
         norm_ranges = {
             'xc': tuple(config.get("xc_range", (-500.0, 500.0))),
             'yc': tuple(config.get("yc_range", (-500.0, 500.0))),
-            'fov': tuple(config.get("fov_range", (10.0, 80.0)))
+            'fov': tuple(config.get("fov_range", (10.0, 80.0))),
+            'wavelength': tuple(config.get("wavelength_range", (400e-9, 700e-9))),
+            'focal_length': tuple(config.get("focal_length_range", (10e-6, 100e-6)))
         }
         normalizer = ParameterNormalizer(norm_ranges)
     

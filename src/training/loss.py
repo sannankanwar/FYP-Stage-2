@@ -31,16 +31,16 @@ class PhysicsInformedLoss(nn.Module):
         if self.normalizer:
             # If standardization is on, the model outputs normalized values.
             # We must normalize the target to match.
-            # normalizer.normalize returns a tensor (B, 3)
-            # We assume true_params (B, 3) matches the order expected by normalizer
-            true_params_norm = self.normalizer.normalize_tensor(true_params[:, :3])
-            loss_param = self.mse(pred_params[:, :3], true_params_norm)
+            # normalizer.normalize returns a tensor (B, 5)
+            # We assume true_params (B, 5) matches the order expected by normalizer
+            true_params_norm = self.normalizer.normalize_tensor(true_params)
+            loss_param = self.mse(pred_params, true_params_norm)
             
             # For physics, we need real units
-            pred_params_phys = self.normalizer.denormalize_tensor(pred_params[:, :3])
+            pred_params_phys = self.normalizer.denormalize_tensor(pred_params)
         else:
-            loss_param = self.mse(pred_params[:, :3], true_params[:, :3])
-            pred_params_phys = pred_params[:, :3]
+            loss_param = self.mse(pred_params, true_params)
+            pred_params_phys = pred_params
 
         # 2. Physics Component (Differentiable Reconstruction)
         B, C, H, W = input_images.shape
@@ -51,12 +51,14 @@ class PhysicsInformedLoss(nn.Module):
         fov = pred_params_phys[:, 2]
 
         # Handle optional dynamic focal_length/wavelength if predicted
-        if pred_params.shape[1] >= 5:
-            focal_length = pred_params[:, 3]
-            wavelength = pred_params[:, 4]
+        # Handle optional dynamic focal_length/wavelength if predicted
+        if pred_params_phys.shape[1] >= 5:
+            wavelength = pred_params_phys[:, 3]
+            focal_length = pred_params_phys[:, 4]
         else:
-            focal_length = torch.tensor(self.fixed_focal_length, device=device)
-            wavelength = torch.tensor(self.fixed_wavelength, device=device)
+            # Expand fixed values to match batch size for proper broadcasting
+            focal_length = torch.tensor(self.fixed_focal_length, device=device).expand(B)
+            wavelength = torch.tensor(self.fixed_wavelength, device=device).expand(B)
 
         # Create coordinate grids
         # Note: We need to do this in a differentiable way relative to xc, yc, fov
@@ -82,6 +84,10 @@ class PhysicsInformedLoss(nn.Module):
         # X = xc + fov * grid_x_normalized
         X_phys = xc.view(B, 1, 1) + fov.view(B, 1, 1) * grid_x
         Y_phys = yc.view(B, 1, 1) + fov.view(B, 1, 1) * grid_y
+
+        # Broadcast focal_length and wavelength to (B, 1, 1) for physics formula
+        focal_length = focal_length.view(B, 1, 1)
+        wavelength = wavelength.view(B, 1, 1)
 
         # Forward Model
         phi_unwrapped = compute_hyperbolic_phase(X_phys, Y_phys, focal_length, wavelength)

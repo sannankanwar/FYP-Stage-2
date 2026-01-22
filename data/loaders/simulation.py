@@ -1,4 +1,7 @@
+
 import numpy as np
+from torch.utils.data import Dataset
+import torch
 from src.inversion.forward_model import (
     compute_hyperbolic_phase, 
     wrap_phase, 
@@ -49,9 +52,15 @@ def generate_single_sample(N,
     phi_wrapped = wrap_phase(phi_unwrapped)
     input_sample = get_2channel_representation(phi_wrapped)
 
-    target = np.array([xc, yc, fov], dtype=np.float32)
+    # If using PyTorch
+    try:
+        import torch
+        if isinstance(xc, torch.Tensor):
+            return input_sample, torch.stack([xc, yc, fov, torch.tensor(wavelength), torch.tensor(focal_length)])
+    except ImportError:
+        pass # torch not available, proceed with numpy
 
-    return input_sample, target
+    return input_sample, np.array([xc, yc, fov, wavelength, focal_length], dtype=np.float32)
 
 
 def generate_dataset(N,
@@ -149,3 +158,46 @@ def generate_grid_dataset(xc_count,
     }
 
     return X, y, metadata
+
+class OnTheFlyDataset(Dataset):
+    """
+    Dataset that generates samples on the fly to avoid memory issues with large datasets.
+    """
+    def __init__(self, config, length=1000):
+        self.config = config
+        self.length = length
+        
+        # Extract params
+        self.N = config.get("resolution", 256) # Default to 256 if not set, be careful with HighRes
+        self.xc_range = tuple(config.get("xc_range", [-500.0, 500.0]))
+        self.yc_range = tuple(config.get("yc_range", [-500.0, 500.0]))
+        self.fov_range = tuple(config.get("fov_range", [10.0, 80.0]))
+        self.wavelength_range = tuple(config.get("wavelength_range", [400e-9, 700e-9]))
+        self.focal_length_range = tuple(config.get("focal_length_range", [10e-6, 100e-6]))
+        self.noise_std = config.get("noise_std", 0.0)
+        
+    def __len__(self):
+        return self.length
+    
+    def __getitem__(self, idx):
+        # Randomize parameters
+        xc = np.random.uniform(*self.xc_range)
+        yc = np.random.uniform(*self.yc_range)
+        fov = np.random.uniform(*self.fov_range)
+        wavelength = np.random.uniform(*self.wavelength_range)
+        focal_length = np.random.uniform(*self.focal_length_range)
+        
+        inp, tgt = generate_single_sample(
+            N=self.N,
+            xc=xc,
+            yc=yc,
+            fov=fov,
+            focal_length=focal_length,
+            wavelength=wavelength,
+            noise_std=self.noise_std
+        )
+        
+        # inp is (H, W, 2), convert to (2, H, W) for PyTorch
+        inp = np.transpose(inp, (2, 0, 1))
+        
+        return torch.from_numpy(inp), torch.from_numpy(tgt)

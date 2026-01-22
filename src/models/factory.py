@@ -23,7 +23,7 @@ def get_model(config):
     
     if name == "spectral_resnet":
         modes = config.get("modes", 16)
-        model = SpectralResNet(in_channels=input_channels, modes=modes)
+        model = SpectralResNet(in_channels=input_channels, modes=modes, output_dim=output_dim)
     elif name == "resnet18":
         model = InverseMetalensModel(output_dim=output_dim, input_channels=input_channels)
     elif name == "wideresnet50":

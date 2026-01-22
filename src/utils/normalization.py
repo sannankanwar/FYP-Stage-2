@@ -5,17 +5,14 @@ class ParameterNormalizer:
         """
         Args:
             ranges (dict): Dictionary of parameter ranges, e.g.,
-                           {'width': [min, max], 'gap': [min, max], ...}
+                           {'xc': [min, max], 'yc': [min, max], ...}
         """
         self.means = {}
         self.stds = {}
         self.param_names = []
         
-        # We assume the model outputs parameters in a specific order.
-        # Ideally, this should be consistent with how the model output is defined.
-        # For this project, let's assume the order is: width, gap, height, length
-        # based on previous data loader logic.
-        self.param_order = ['xc', 'yc', 'fov']
+        # Order of parameters in the tensor
+        self.param_order = ['xc', 'yc', 'fov', 'wavelength', 'focal_length']
         
         self._compute_stats(ranges)
 
@@ -23,22 +20,19 @@ class ParameterNormalizer:
         for name in self.param_order:
             if name in ranges:
                 low, high = ranges[name]
-                # Map [low, high] to roughly [-1, 1] or similar standard normal
-                # Using mean and std of a uniform distribution U(low, high)
-                # mean = (high + low) / 2
-                # std = (high - low) / sqrt(12)
-                # Or just MinMax scaling to [-1, 1]?
-                # Standard score (z-score) is usually better for neural nets.
+                # Scale to [-1, 1]
+                # val = (x - mean) / scale
+                # where mean = (high + low) / 2
+                # and scale = (high - low) / 2
                 
                 mu = (high + low) / 2.0
-                sigma = (high - low) / (2.0 * 1.732) # approx sqrt(3) is 1.732 for uniform distribution std dev
-                # actually, let's just use simple scaling to mean 0, range [-1, 1]
-                # val = (x - mu) / (range/2)
+                sigma = (high - low) / 2.0 
                 
                 self.means[name] = mu
-                self.stds[name] = (high - low) / 2.0 # Scale to [-1, 1]
+                self.stds[name] = sigma
             else:
                 # Default identity
+                # print(f"Warning: Range for {name} not provided to normalizer. Using Identity.")
                 self.means[name] = 0.0
                 self.stds[name] = 1.0
 

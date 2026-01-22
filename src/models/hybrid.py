@@ -8,7 +8,7 @@ class SpectralResNet(nn.Module):
     Hybrid architecture: ResNet Stem + Spectral Gating + MLP Head.
     Optimized for high-resolution input (1024x1024) to predict metalens parameters.
     """
-    def __init__(self, in_channels=2, modes=16):
+    def __init__(self, in_channels=2, modes=16, output_dim=3):
         super().__init__()
         
         # 1. ResNet Backbone (Stem)
@@ -49,7 +49,7 @@ class SpectralResNet(nn.Module):
             nn.Linear(512, 128),
             nn.ReLU(),
             nn.Dropout(0.1),
-            nn.Linear(128, 3) # [xc, yc, fov]
+            nn.Linear(128, output_dim) # [xc, yc, fov, ...]
         )
 
     def forward(self, x):

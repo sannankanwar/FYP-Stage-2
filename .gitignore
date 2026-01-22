@@ -30,3 +30,6 @@ outputs/
 # Tests
 tests/temp_outputs/
 tests/temp_outputs_std/
+tests/*.png
+tests/*.txt
+tests/debug_*.py

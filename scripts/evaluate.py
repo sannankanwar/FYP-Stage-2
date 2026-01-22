@@ -14,6 +14,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from src.models.factory import get_model
 from data.loaders.simulation import generate_grid_dataset
 from src.utils.model_utils import replace_activation
+from src.utils.normalization import ParameterNormalizer
 
 def evaluate_grid(checkpoint_path, output_dir, device="cpu", steps=50):
     """
@@ -59,7 +60,24 @@ def evaluate_grid(checkpoint_path, output_dir, device="cpu", steps=50):
         xc_range=xc_range,
         yc_range=yc_range,
         N=config.get("resolution", 256)
+        N=config.get("resolution", 256)
     )
+    
+    # Initialize Normalizer if needed
+    normalizer = None
+    if config.get("standardize_outputs", False):
+        print("Detected Standardized Model: Initializing Normalizer...")
+        # Normalizer needs ranges. We use the evaluation ranges here since that's what we are feeding in?
+        # Ideally, we should use the ranges the model was TRAINED on. 
+        # But for OnTheFly, the training ranges are in the config.
+        # Let's try to pull from config if available, else use defaults.
+        
+        norm_ranges = {
+            'xc': tuple(config.get("xc_range", (-500.0, 500.0))),
+            'yc': tuple(config.get("yc_range", (-500.0, 500.0))),
+            'fov': tuple(config.get("fov_range", (10.0, 80.0)))
+        }
+        normalizer = ParameterNormalizer(norm_ranges)
     
     # X: (N_samples, H, W, 2) -> Need (N_samples, 2, H, W)
     X = np.transpose(X, (0, 3, 1, 2))
@@ -80,7 +98,18 @@ def evaluate_grid(checkpoint_path, output_dir, device="cpu", steps=50):
             preds = model(inputs)
             predictions.append(preds.cpu())
             
+            predictions.append(preds.cpu())
+            
     predictions = torch.cat(predictions, dim=0) # (N_samples, 3)
+    
+    # Denormalize if needed
+    if normalizer:
+        print("Denormalizing predictions...")
+        # Only denormalize the first 3 (xc, yc, fov)
+        # Assuming predictions might have more columns later? 
+        # But normalizer works on shape (B, 3) usually.
+        # The model output is (B, 3).
+        predictions = normalizer.denormalize_tensor(predictions)
     
     # Calculate Square Error per sample (Sum of squared errors for xc, yc, fov or just params?)
     # Users usually care about spatial error (xc, yc) mostly. Let's do total parameter MSE.

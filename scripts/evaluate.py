@@ -16,7 +16,37 @@ from data.loaders.simulation import generate_grid_dataset
 from src.utils.model_utils import replace_activation
 from src.utils.normalization import ParameterNormalizer
 
-def evaluate_grid(checkpoint_path, output_dir, device="cpu", steps=50):
+def visualize_sample(input_tensor, true_params, pred_params, loss, title, output_path):
+    """
+    Visualizes a single sample: Phase Map + Parameter Info
+    input_tensor: (2, H, W)
+    """
+    # Compute Phase from (Cos, Sin)
+    # input_tensor is numpy array or tensor on cpu
+    if isinstance(input_tensor, torch.Tensor):
+        input_tensor = input_tensor.numpy()
+        
+    cos_phi = input_tensor[0]
+    sin_phi = input_tensor[1]
+    phase = np.arctan2(sin_phi, cos_phi)
+    
+    plt.figure(figsize=(8, 8))
+    plt.imshow(phase, cmap='hsv', origin='lower') # HSV is good for phase
+    plt.colorbar(label='Phase (rad)')
+    plt.title(f"{title}\nLoss: {loss:.6f}")
+    
+    # Text info
+    info_text = (
+        f"TRUE: xc={true_params[0]:.2f}, yc={true_params[1]:.2f}, fov={true_params[2]:.2f}\n"
+        f"PRED: xc={pred_params[0]:.2f}, yc={pred_params[1]:.2f}, fov={pred_params[2]:.2f}"
+    )
+    plt.figtext(0.5, 0.05, info_text, ha="center", fontsize=12, bbox={"facecolor":"white", "alpha":0.8, "pad":5})
+    
+    plt.tight_layout()
+    plt.savefig(output_path)
+    plt.close()
+
+def evaluate_grid(checkpoint_path, output_dir, device="cpu", steps=25):
     """
     Evaluates the model on a dense grid of (xc, yc) coordinates and plots a heatmap of the error.
     """
@@ -60,7 +90,6 @@ def evaluate_grid(checkpoint_path, output_dir, device="cpu", steps=50):
         xc_range=xc_range,
         yc_range=yc_range,
         N=config.get("resolution", 256)
-        N=config.get("resolution", 256)
     )
     
     # Initialize Normalizer if needed
@@ -96,8 +125,6 @@ def evaluate_grid(checkpoint_path, output_dir, device="cpu", steps=50):
         for inputs, targets in tqdm(loader):
             inputs = inputs.to(device)
             preds = model(inputs)
-            predictions.append(preds.cpu())
-            
             predictions.append(preds.cpu())
             
     predictions = torch.cat(predictions, dim=0) # (N_samples, 3)
@@ -149,11 +176,35 @@ def evaluate_grid(checkpoint_path, output_dir, device="cpu", steps=50):
         f.write(f"Max MSE: {np.max(mse_per_sample)}\n")
         f.write(f"Min MSE: {np.min(mse_per_sample)}\n")
 
+    # 6. Find and Save Best/Worst Cases
+    min_idx = np.argmin(mse_per_sample)
+    max_idx = np.argmax(mse_per_sample)
+    
+    print(f"Saving Best Case (Index {min_idx}, Loss {mse_per_sample[min_idx]:.6f})...")
+    visualize_sample(
+        X[min_idx], 
+        y[min_idx], 
+        predictions[min_idx].numpy(), 
+        mse_per_sample[min_idx],
+        "Best Case Prediction",
+        os.path.join(output_dir, "best_case.png")
+    )
+    
+    print(f"Saving Worst Case (Index {max_idx}, Loss {mse_per_sample[max_idx]:.6f})...")
+    visualize_sample(
+        X[max_idx], 
+        y[max_idx], 
+        predictions[max_idx].numpy(), 
+        mse_per_sample[max_idx],
+        "Worst Case Prediction",
+        os.path.join(output_dir, "worst_case.png")
+    )
+
 def main():
     parser = argparse.ArgumentParser(description="Evaluate model on a dense grid and generate heatmap.")
     parser.add_argument("--experiment_dir", type=str, required=True, help="Path to experiment directory (e.g., outputs/experiment1)")
     parser.add_argument("--checkpoint", type=str, default="best_model.pth", help="Name of checkpoint file (default: best_model.pth)")
-    parser.add_argument("--steps", type=int, default=50, help="Grid resolution (steps x steps)")
+    parser.add_argument("--steps", type=int, default=25, help="Grid resolution (steps x steps). Default 25.")
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     
     args = parser.parse_args()

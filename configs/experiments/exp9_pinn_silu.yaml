@@ -10,7 +10,7 @@ data:
   wavelength: 633e-9
 
 training:
-  epochs: 50
+  epochs: 100
   learning_rate: 1e-3
   optimizer: "adam"
   scheduler: "plateau" # Use plateau for stability 

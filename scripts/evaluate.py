@@ -163,7 +163,19 @@ def evaluate_grid(checkpoint_path, output_dir, device="cpu", steps=25):
     print(f"Model Config: Name={config.get('name')}, Activation={config.get('activation', 'ReLU (Default)')}")
     
     # Instantiate Model
-    model = get_model(config)
+    # Instantiate Model
+    # Handle potentially nested model config (e.g. from exp13 yaml where it's under 'model')
+    model_conf = config.copy()
+    if 'model' in config:
+        print("Flattening 'model' section from config...")
+        model_conf.update(config['model'])
+    
+    # Map 'type' to 'name' if 'name' is missing (common alias in our yamls)
+    if 'name' not in model_conf and 'type' in model_conf:
+        model_conf['name'] = model_conf['type']
+        
+    print(f"Model Factory Config: {model_conf}")
+    model = get_model(model_conf)
     
     # Load Weights
     model.load_state_dict(checkpoint['model_state_dict'])

@@ -10,11 +10,17 @@ test_split: 0.1
 batch_size: 32
 num_workers: 4
 
+# Field of View (Degrees): 1 to 20
+fov_range: [1.0, 20.0]
+
 # Wavelength: 400nm to 700nm (Visible)
 wavelength_range: [400.0e-9, 700.0e-9]
 
 # Focal Length: 10um to 100um
 focal_length_range: [10.0e-6, 100.0e-6]
+
+# Data Generation Strategy
+grid_strategy: "mean" # "mean" (fix constants to avg) or "random_fixed" (randomize constants once)
 
 # Evaluation Tiers
 eval:

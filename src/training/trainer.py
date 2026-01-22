@@ -20,7 +20,7 @@ class Trainer:
         self.model = self.model.to(self.device)
         
         # Setup Optimizer and Loss
-        lr = config.get("learning_rate", 1e-3)
+        lr = float(config.get("learning_rate", 1e-3))
         opt_name = config.get("optimizer", "adam").lower()
         
         if opt_name == "muon":
@@ -37,8 +37,9 @@ class Trainer:
         scheduler_name = config.get("scheduler", None)
         if scheduler_name == "plateau":
             print("Using ReduceLROnPlateau Scheduler")
-            patience = config.get("scheduler_patience", 10)
-            factor = config.get("scheduler_factor", 0.1)
+            print("Using ReduceLROnPlateau Scheduler")
+            patience = int(config.get("scheduler_patience", 10))
+            factor = float(config.get("scheduler_factor", 0.1))
             self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(
                 self.optimizer, mode='min', patience=patience, factor=factor
             )
@@ -102,8 +103,8 @@ class Trainer:
         os.makedirs(self.log_dir, exist_ok=True)
         
     def train(self):
-        epochs = self.config.get("epochs", 10)
-        log_interval = self.config.get("log_interval", 10)
+        epochs = int(self.config.get("epochs", 10))
+        log_interval = int(self.config.get("log_interval", 10))
         
         print(f"Starting training for {epochs} epochs...")
         

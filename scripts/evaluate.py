@@ -46,6 +46,100 @@ def visualize_sample(input_tensor, true_params, pred_params, loss, title, output
     plt.savefig(output_path)
     plt.close()
 
+def plot_scatter(y_true, y_pred, output_dir, title="Parameter Scatter Plots"):
+    """
+    Plots True vs Predicted scatter plots for each parameter (xc, yc, fov).
+    y_true, y_pred: (N, 3) arrays
+    """
+    params = ['xc', 'yc', 'fov']
+    fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+    
+    for i, param in enumerate(params):
+        ax = axes[i]
+        true_vals = y_true[:, i]
+        pred_vals = y_pred[:, i]
+        
+        # Calculate R2 or correlation
+        correlation = np.corrcoef(true_vals, pred_vals)[0, 1]
+        mse = np.mean((true_vals - pred_vals)**2)
+        
+        ax.scatter(true_vals, pred_vals, alpha=0.5, s=1)
+        
+        # Plot identity line
+        min_val = min(true_vals.min(), pred_vals.min())
+        max_val = max(true_vals.max(), pred_vals.max())
+        ax.plot([min_val, max_val], [min_val, max_val], 'r--', label='Ideal')
+        
+        ax.set_xlabel(f'True {param}')
+        ax.set_ylabel(f'Predicted {param}')
+        ax.set_title(f'{param} (R={correlation:.3f}, MSE={mse:.2f})')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        
+    plt.suptitle(title)
+    plt.tight_layout()
+    output_path = os.path.join(output_dir, "scatter_plots.png")
+    plt.savefig(output_path)
+    print(f"Scatter plots saved to {output_path}")
+    plt.close()
+
+def get_subdirectories(path):
+    return [d for d in os.listdir(path) if os.path.isdir(os.path.join(path, d))]
+
+def select_experiments(base_dir="outputs"):
+    if not os.path.exists(base_dir):
+        print(f"Directory '{base_dir}' not found.")
+        return []
+        
+    experiments = sorted(get_subdirectories(base_dir))
+    if not experiments:
+        print("No experiments found.")
+        return []
+        
+    print("\nAvailable Experiments:")
+    for i, exp in enumerate(experiments):
+        print(f"{i+1}. {exp}")
+        
+    selection = input("\nEnter experiment numbers (comma-separated, e.g., 1,3) or 'all': ").strip()
+    
+    selected_exps = []
+    if selection.lower() == 'all':
+        return [os.path.join(base_dir, exp) for exp in experiments]
+    
+    try:
+        indices = [int(x.strip()) - 1 for x in selection.split(',')]
+        for idx in indices:
+            if 0 <= idx < len(experiments):
+                selected_exps.append(os.path.join(base_dir, experiments[idx]))
+            else:
+                print(f"Warning: Index {idx+1} out of range. Skipping.")
+    except ValueError:
+        print("Invalid input. Please enter numbers.")
+        
+    return selected_exps
+
+def select_resolution():
+    print("\nSelect Grid Resolution:")
+    print("1. 10x10 (Fast)")
+    print("2. 25x25 (medium)")
+    print("3. 50x50 (Detailed)")
+    print("4. Custom")
+    
+    choice = input("Enter choice (1-4): ").strip()
+    
+    if choice == '1': return 10
+    if choice == '2': return 25
+    if choice == '3': return 50
+    if choice == '4':
+        try:
+            return int(input("Enter custom resolution (e.g. 20): ").strip())
+        except ValueError:
+            print("Invalid number. Defaulting to 25.")
+            return 25
+    
+    print("Invalid choice. Defaulting to 25.")
+    return 25
+
 def evaluate_grid(checkpoint_path, output_dir, device="cpu", steps=25):
     """
     Evaluates the model on a dense grid of (xc, yc) coordinates and plots a heatmap of the error.
@@ -176,6 +270,12 @@ def evaluate_grid(checkpoint_path, output_dir, device="cpu", steps=25):
         f.write(f"Max MSE: {np.max(mse_per_sample)}\n")
         f.write(f"Min MSE: {np.min(mse_per_sample)}\n")
 
+    # 6. Scatter Plots
+    print("Generating Scatter Plots...")
+    plot_scatter(y, predictions.numpy(), output_dir)
+    
+    # 7. Find and Save Best/Worst Cases
+
     # 6. Find and Save Best/Worst Cases
     min_idx = np.argmin(mse_per_sample)
     max_idx = np.argmax(mse_per_sample)
@@ -202,26 +302,52 @@ def evaluate_grid(checkpoint_path, output_dir, device="cpu", steps=25):
 
 def main():
     parser = argparse.ArgumentParser(description="Evaluate model on a dense grid and generate heatmap.")
-    parser.add_argument("--experiment_dir", type=str, required=True, help="Path to experiment directory (e.g., outputs/experiment1)")
+    parser.add_argument("--experiment_dir", type=str, help="Path to experiment directory (optional, for non-interactive mode)")
     parser.add_argument("--checkpoint", type=str, default="best_model.pth", help="Name of checkpoint file (default: best_model.pth)")
     parser.add_argument("--steps", type=int, default=25, help="Grid resolution (steps x steps). Default 25.")
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     
     args = parser.parse_args()
     
-    checkpoint_path = os.path.join(args.experiment_dir, "checkpoints", args.checkpoint)
-    
-    if not os.path.exists(checkpoint_path):
-        print(f"Checkpoint not found at {checkpoint_path}")
-        # Try looking directly if user passed full path
-        if os.path.exists(args.experiment_dir) and args.experiment_dir.endswith(".pth"):
-             checkpoint_path = args.experiment_dir
-             # Infer output dir
-             args.experiment_dir = os.path.dirname(os.path.dirname(checkpoint_path))
-        else:
-            sys.exit(1)
+    # Check if arguments provided for non-interactive mode
+    if args.experiment_dir:
+        checkpoint_path = os.path.join(args.experiment_dir, "checkpoints", args.checkpoint)
+        # Check direct path logic...
+        if not os.path.exists(checkpoint_path):
+             if os.path.exists(args.experiment_dir) and args.experiment_dir.endswith(".pth"):
+                 checkpoint_path = args.experiment_dir
+                 args.experiment_dir = os.path.dirname(os.path.dirname(checkpoint_path))
+        
+        evaluate_grid(checkpoint_path, args.experiment_dir, device=args.device, steps=args.steps)
+    else:
+        # Interactive Mode
+        print("=== Interactive Evaluation Mode ===")
+        selected_exps = select_experiments()
+        if not selected_exps:
+            print("No experiments selected. Exiting.")
+            return
             
-    evaluate_grid(checkpoint_path, args.experiment_dir, device=args.device, steps=args.steps)
+        resolution = select_resolution()
+        
+        print(f"\nProcessing {len(selected_exps)} experiments with resolution {resolution}x{resolution}...")
+        
+        for exp_dir in selected_exps:
+            print(f"\n--- Evaluating {os.path.basename(exp_dir)} ---")
+            checkpoint_path = os.path.join(exp_dir, "checkpoints", args.checkpoint)
+            
+            if not os.path.exists(checkpoint_path):
+                # Try latest if best not found? 
+                latest_path = os.path.join(exp_dir, "checkpoints", "latest_checkpoint.pth")
+                if os.path.exists(latest_path):
+                     print(f"Note: '{args.checkpoint}' not found, using 'latest_checkpoint.pth' instead.")
+                     checkpoint_path = latest_path
+                else:
+                    print(f"Skipping {exp_dir}: Checkpoint not found.")
+                    continue
+            
+            evaluate_grid(checkpoint_path, exp_dir, device=args.device, steps=resolution)
+            
+        print("\nAll evaluations completed.")
 
 if __name__ == "__main__":
     main()

@@ -1,0 +1,27 @@
+# Experiment 08: Spectral Physics Extreme
+# Hypothesis: Can physics loss stabilize extreme weighting?
+experiment_name: "exp08_spectral_phys_extreme"
+description: "Spectral ResNet with extreme weights + Physics Loss."
+
+# Training
+epochs: 100
+batch_size: 32
+learning_rate: 0.001
+optimizer: "adam"
+scheduler: "plateau"
+lambda_param: 1.0
+lambda_physics: 0.5 
+
+# Model
+model:
+  name: "spectral_resnet"
+  input_channels: 2
+  output_dim: 5
+  modes: 32
+  activation: "relu"
+
+# Data & Loss
+standardize_outputs: true
+loss_function: "weighted_physics"
+loss_weights: [1.0, 1.0, 1.0, 50.0, 50.0]
+grid_strategy: "mean"

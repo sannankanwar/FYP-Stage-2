@@ -1,0 +1,26 @@
+# Experiment 06: ResNet Physics
+# Hypothesis: Can physics loss compensate for ResNet's smaller receptive field?
+experiment_name: "exp06_resnet_physics"
+description: "ResNet18 with Weighted Physics Loss (Standardized weights + Reconstruction)."
+
+# Training
+epochs: 100
+batch_size: 32
+learning_rate: 0.001
+optimizer: "adam"
+scheduler: "plateau"
+lambda_param: 1.0
+lambda_physics: 0.1
+
+# Model
+model:
+  name: "resnet18"
+  input_channels: 2
+  output_dim: 5
+  activation: "relu"
+
+# Data & Loss
+standardize_outputs: true
+loss_function: "weighted_physics"
+loss_weights: [1.0, 1.0, 1.0, 10.0, 10.0]
+grid_strategy: "mean"

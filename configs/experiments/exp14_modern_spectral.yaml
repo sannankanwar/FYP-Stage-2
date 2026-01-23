@@ -1,0 +1,25 @@
+# Experiment 14: Modern Spectral
+# Hypothesis: Modern Best. Combining SiLU, Muon, and strong weights.
+experiment_name: "exp14_modern_spectral"
+description: "Spectral ResNet + SiLU + Muon + Strong Weights."
+
+# Training
+epochs: 100
+batch_size: 32
+learning_rate: 0.02
+optimizer: "muon"
+scheduler: "plateau"
+
+# Model
+model:
+  name: "spectral_resnet"
+  input_channels: 2
+  output_dim: 5
+  modes: 32
+  activation: "silu"
+
+# Data & Loss
+standardize_outputs: true
+loss_function: "weighted_standardized"
+loss_weights: [1.0, 1.0, 1.0, 20.0, 20.0]
+grid_strategy: "mean"

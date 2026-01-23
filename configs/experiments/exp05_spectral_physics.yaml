@@ -1,0 +1,27 @@
+# Experiment 05: Spectral Physics
+# Hypothesis: Does physics reconstruction loss refine parameters further?
+experiment_name: "exp05_spectral_physics"
+description: "Spectral ResNet with Weighted Physics Loss (Standardized weights + Reconstruction)."
+
+# Training
+epochs: 100
+batch_size: 32
+learning_rate: 0.001
+optimizer: "adam"
+scheduler: "plateau"
+lambda_param: 1.0
+lambda_physics: 0.1
+
+# Model
+model:
+  name: "spectral_resnet"
+  input_channels: 2
+  output_dim: 5
+  modes: 32
+  activation: "relu"
+
+# Data & Loss
+standardize_outputs: true
+loss_function: "weighted_physics"
+loss_weights: [1.0, 1.0, 1.0, 10.0, 10.0]
+grid_strategy: "mean"

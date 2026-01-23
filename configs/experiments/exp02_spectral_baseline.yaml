@@ -1,0 +1,24 @@
+# Experiment 02: Spectral Baseline
+# Hypothesis: Does Spectral Gating improve over ResNet on raw MSE?
+experiment_name: "exp02_spectral_baseline"
+description: "Baseline Spectral ResNet with naive 5-parameter MSE loss."
+
+# Training
+epochs: 100
+batch_size: 32
+learning_rate: 0.001
+optimizer: "adam"
+scheduler: "plateau"
+
+# Model
+model:
+  name: "spectral_resnet"
+  input_channels: 2
+  output_dim: 5
+  modes: 32
+  activation: "relu"
+
+# Data & Loss
+standardize_outputs: true
+loss_function: "naive_5param"
+grid_strategy: "mean"

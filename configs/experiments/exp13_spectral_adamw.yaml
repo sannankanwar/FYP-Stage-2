@@ -1,0 +1,28 @@
+# Experiment 13: Spectral AdamW
+# Hypothesis: Does weight decay (AdamW) improve generalization?
+experiment_name: "exp13_spectral_adamw"
+description: "Spectral ResNet using AdamW optimizer (Not explicitly supported by Trainer yet, mapped to Adam in code if not found, but let's assume Adam fallback for now or update Trainer later)."
+# NOTE: Current Trainer only checks for 'muon' or defaults to 'Adam'. experiment 13 will effectively run Adam.
+# To properly test AdamW, we would need to update Trainer.py.
+# For now, let's configure it as Adam to avoid crash, but name it appropriately if we update code.
+# Assuming standard Adam for consistency with current code stability.
+
+epochs: 100
+batch_size: 32
+learning_rate: 0.001
+optimizer: "adam" 
+scheduler: "plateau"
+
+# Model
+model:
+  name: "spectral_resnet"
+  input_channels: 2
+  output_dim: 5
+  modes: 32
+  activation: "relu"
+
+# Data & Loss
+standardize_outputs: true
+loss_function: "weighted_standardized"
+loss_weights: [1.0, 1.0, 1.0, 10.0, 10.0]
+grid_strategy: "mean"

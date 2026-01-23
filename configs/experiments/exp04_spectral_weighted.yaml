@@ -1,0 +1,25 @@
+# Experiment 04: Spectral Weighted
+# Hypothesis: Primary Candidate. Likely best trade-off for spectral features.
+experiment_name: "exp04_spectral_weighted"
+description: "Spectral ResNet with weighted standardized loss focusing on Wavelength/Focal Length."
+
+# Training
+epochs: 100
+batch_size: 32
+learning_rate: 0.001
+optimizer: "adam"
+scheduler: "plateau"
+
+# Model
+model:
+  name: "spectral_resnet"
+  input_channels: 2
+  output_dim: 5
+  modes: 32
+  activation: "relu"
+
+# Data & Loss
+standardize_outputs: true
+loss_function: "weighted_standardized"
+loss_weights: [1.0, 1.0, 1.0, 10.0, 10.0]
+grid_strategy: "mean"

@@ -1,0 +1,23 @@
+# Experiment 01: ResNet Baseline
+# Hypothesis: Does standard ResNet work out of the box?
+experiment_name: "exp01_resnet_baseline"
+description: "Baseline ResNet18 model with naive 5-parameter MSE loss."
+
+# Training
+epochs: 100
+batch_size: 32
+learning_rate: 0.001
+optimizer: "adam"
+scheduler: "plateau"
+
+# Model
+model:
+  name: "resnet18"
+  input_channels: 2
+  output_dim: 5
+  activation: "relu"
+
+# Data & Loss
+standardize_outputs: true
+loss_function: "naive_5param"
+grid_strategy: "mean"

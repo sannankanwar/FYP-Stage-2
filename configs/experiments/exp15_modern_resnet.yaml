@@ -1,0 +1,24 @@
+# Experiment 15: Modern ResNet
+# Hypothesis: Strongest possible ResNet baseline to compare against Exp 14.
+experiment_name: "exp15_modern_resnet"
+description: "ResNet18 + SiLU + Muon + Strong Weights."
+
+# Training
+epochs: 100
+batch_size: 32
+learning_rate: 0.02
+optimizer: "muon"
+scheduler: "plateau"
+
+# Model
+model:
+  name: "resnet18"
+  input_channels: 2
+  output_dim: 5
+  activation: "silu"
+
+# Data & Loss
+standardize_outputs: true
+loss_function: "weighted_standardized"
+loss_weights: [1.0, 1.0, 1.0, 20.0, 20.0]
+grid_strategy: "mean"

@@ -130,7 +130,7 @@ class Trainer:
             # Alternating Strategy
             # Odd Epochs (1, 3, ...): Random Data (on-the-fly) - Note epoch starts at 0
             # Even Epochs (0, 2, ...): Fixed Grid Data
-            if epoch % 2 != 0:
+            if epoch % 2 == 0:
                 print(f"--- Epoch {epoch+1} (Random Data) ---")
                 active_loader = self.train_loader
             else:

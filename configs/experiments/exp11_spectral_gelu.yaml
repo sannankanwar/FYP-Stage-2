@@ -1,0 +1,25 @@
+# Experiment 11: Spectral GELU
+# Hypothesis: Testing modern transformer standard activation.
+experiment_name: "exp11_spectral_gelu"
+description: "Spectral ResNet with GELU activation and standard weights."
+
+# Training
+epochs: 100
+batch_size: 32
+learning_rate: 0.001
+optimizer: "adam"
+scheduler: "plateau"
+
+# Model
+model:
+  name: "spectral_resnet"
+  input_channels: 2
+  output_dim: 5
+  modes: 32
+  activation: "gelu"
+
+# Data & Loss
+standardize_outputs: true
+loss_function: "weighted_standardized"
+loss_weights: [1.0, 1.0, 1.0, 10.0, 10.0]
+grid_strategy: "mean"

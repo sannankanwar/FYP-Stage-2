@@ -1,0 +1,13 @@
+
+experiment_name: "test_smoke_resnet"
+description: "ResNet18 smoke test"
+epochs: 10
+batch_size: 4
+learning_rate: 0.001
+optimizer: "adam"
+standardize_outputs: true
+loss_function: "weighted_standardized"
+loss_weights: [1, 1, 1, 1, 1]
+model:
+  name: "resnet18"
+  resolution: 64

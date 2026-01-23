@@ -6,10 +6,16 @@ This file contains the core physical model for the metalens phase maps.
 It supports both NumPy arrays (for data generation) and PyTorch tensors (for differentiable loss).
 """
 
-def compute_hyperbolic_phase(X, Y, focal_length, wavelength):
+def compute_hyperbolic_phase(X, Y, focal_length, wavelength, theta=0.0):
     """
     Computes the unwrapped hyperbolic phase for a given coordinate grid.
     Supports both numpy and torch inputs.
+    
+    Args:
+        X, Y: Coordinate grids (micrometers)
+        focal_length: Design focal length (micrometers)
+        wavelength: Design wavelength (micrometers)
+        theta: Incident angle in degrees (fov parameter)
     """
     # Check if inputs are torch tensors
     is_torch = isinstance(X, torch.Tensor) or isinstance(focal_length, torch.Tensor)
@@ -17,13 +23,25 @@ def compute_hyperbolic_phase(X, Y, focal_length, wavelength):
     if is_torch:
         pi = torch.pi
         sqrt = torch.sqrt
+        sin = torch.sin
     else:
         pi = np.pi
         sqrt = np.sqrt
+        sin = np.sin
 
     k0 = 2.0 * pi / wavelength
     R = sqrt(X**2 + Y**2)
-    return k0 * (sqrt(R**2 + focal_length**2) - focal_length)
+    
+    # 1. Hyperbolic Focusing Phase: phi = -k0 * (sqrt(R^2 + f^2) - f)
+    # The negative sign is crucial for a CONVERGING (focusing) lens.
+    phase_binary = -k0 * (sqrt(R**2 + focal_length**2) - focal_length)
+    
+    # 2. Incident Tilt (Off-axis angle): phi_tilt = k0 * x * sin(theta)
+    # Convert theta from degrees to radians
+    theta_rad = theta * pi / 180.0
+    phase_tilt = k0 * (X * sin(theta_rad))
+    
+    return phase_binary + phase_tilt
 
 def wrap_phase(unwrapped_phase):
     """

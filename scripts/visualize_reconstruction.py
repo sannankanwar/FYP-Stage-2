@@ -42,8 +42,8 @@ def visualize_reconstruction(experiment_dir, num_samples=5):
             'xc': [-500.0, 500.0],
             'yc': [-500.0, 500.0],
             'fov': [1.0, 20.0],
-            'wavelength': [400e-9, 700e-9],
-            'focal_length': [10e-6, 100e-6]
+            'wavelength': [0.4, 0.7],
+            'focal_length': [10.0, 100.0]
         }
         # Override with config if present
         data_cfg = load_config("configs/data.yaml")
@@ -57,19 +57,20 @@ def visualize_reconstruction(experiment_dir, num_samples=5):
     # We use the center of the grid or random samples. 
     # Let's use a 5-sample strip from the validation grid for consistency.
     N = config['model'].get("resolution", 256)
+    window_size = config.get("window_size", 100.0)
     
     # We generate a few distinct samples
     samples = []
     # Sample 1: Center
-    samples.append((0.0, 0.0, 10.0, 550e-9, 50e-6))
+    samples.append((0.0, 0.0, 10.0, 0.55, 50.0))
     # Sample 2: Offset
-    samples.append((200.0, -100.0, 5.0, 450e-9, 30e-6))
+    samples.append((200.0, -100.0, 5.0, 0.45, 30.0))
     # Sample 3: High FOV
-    samples.append((-300.0, 300.0, 18.0, 650e-9, 80e-6))
+    samples.append((-300.0, 300.0, 18.0, 0.65, 80.0))
     # Sample 4: Low wavelength
-    samples.append((50.0, 50.0, 8.0, 410e-9, 20e-6))
+    samples.append((50.0, 50.0, 8.0, 0.41, 20.0))
     # Sample 5: High focal length
-    samples.append((-150.0, -250.0, 12.0, 580e-9, 95e-6))
+    samples.append((-150.0, -250.0, 12.0, 0.58, 95.0))
     
     fig, axes = plt.subplots(num_samples, 3, figsize=(15, 5 * num_samples))
     plt.subplots_adjust(hspace=0.4)
@@ -79,15 +80,16 @@ def visualize_reconstruction(experiment_dir, num_samples=5):
         
         # Generate Ground Truth Input & Phase
         # physical grids
-        x_coords = np.linspace(xc - fov / 2.0, xc + fov / 2.0, N, dtype=np.float32)
-        y_coords = np.linspace(yc - fov / 2.0, yc + fov / 2.0, N, dtype=np.float32)
+        # physical grids (window_size instead of fov)
+        x_coords = np.linspace(xc - window_size / 2.0, xc + window_size / 2.0, N, dtype=np.float32)
+        y_coords = np.linspace(yc - window_size / 2.0, yc + window_size / 2.0, N, dtype=np.float32)
         X_grid, Y_grid = np.meshgrid(x_coords, y_coords)
         
-        phi_gt_unwrapped = compute_hyperbolic_phase(X_grid, Y_grid, fl, wl)
+        phi_gt_unwrapped = compute_hyperbolic_phase(X_grid, Y_grid, fl, wl, theta=fov)
         phi_gt = wrap_phase(phi_gt_unwrapped)
         
         # Prepare input for model
-        input_data, _ = generate_single_sample(N, xc, yc, fov, fl, wl)
+        input_data, _ = generate_single_sample(N, xc, yc, fov, fl, wl, window_size=window_size)
         # input is (H, W, 2), convert to (B, 2, H, W)
         input_tensor = torch.from_numpy(np.transpose(input_data, (2, 0, 1))).unsqueeze(0)
         
@@ -103,7 +105,7 @@ def visualize_reconstruction(experiment_dir, num_samples=5):
         
         # Reconstruct Phase from Prediction
         # Grid must be same as GT for comparison
-        phi_pred_unwrapped = compute_hyperbolic_phase(X_grid, Y_grid, p_fl, p_wl)
+        phi_pred_unwrapped = compute_hyperbolic_phase(X_grid, Y_grid, p_fl, p_wl, theta=p_fov)
         phi_pred = wrap_phase(phi_pred_unwrapped)
         
         # Error Map
@@ -113,17 +115,17 @@ def visualize_reconstruction(experiment_dir, num_samples=5):
 
         # Plotting
         ax_gt = axes[i, 0]
-        im_gt = ax_gt.imshow(phi_gt, extent=[-fov/2, fov/2, -fov/2, fov/2], cmap='twilight')
-        ax_gt.set_title(f"GT Phase\n$\lambda$={wl*1e9:.0f}nm, f={fl*1e6:.0f}$\mu$m")
+        im_gt = ax_gt.imshow(phi_gt, extent=[-window_size/2, window_size/2, -window_size/2, window_size/2], cmap='twilight')
+        ax_gt.set_title(f"GT Phase\n$\lambda$={wl*1000:.0f}nm, f={fl:.1f}$\mu$m, $\\theta$={fov:.1f}$^\circ$")
         plt.colorbar(im_gt, ax=ax_gt)
 
         ax_pred = axes[i, 1]
-        im_pred = ax_pred.imshow(phi_pred, extent=[-fov/2, fov/2, -fov/2, fov/2], cmap='twilight')
-        ax_pred.set_title(f"Pred Phase\n$\lambda$={p_wl*1e9:.0f}nm, f={p_fl*1e6:.0f}$\mu$m")
+        im_pred = ax_pred.imshow(phi_pred, extent=[-window_size/2, window_size/2, -window_size/2, window_size/2], cmap='twilight')
+        ax_pred.set_title(f"Pred Phase\n$\lambda$={p_wl*1000:.0f}nm, f={p_fl:.1f}$\mu$m, $\\theta$={p_fov:.1f}$^\circ$")
         plt.colorbar(im_pred, ax=ax_pred)
 
         ax_err = axes[i, 2]
-        im_err = ax_err.imshow(error_map, extent=[-fov/2, fov/2, -fov/2, fov/2], cmap='hot')
+        im_err = ax_err.imshow(error_map, extent=[-window_size/2, window_size/2, -window_size/2, window_size/2], cmap='hot')
         ax_err.set_title("Absolute Error Map")
         plt.colorbar(im_err, ax=ax_err)
 

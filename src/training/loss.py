@@ -76,6 +76,7 @@ class WeightedPhysicsLoss(nn.Module):
                  param_weights=[1.0, 1.0, 1.0, 10.0, 10.0],
                  fixed_focal_length=100.0, 
                  fixed_wavelength=0.532, 
+                 window_size=100.0,
                  normalizer=None):
         super().__init__()
         self.lambda_param = lambda_param
@@ -85,6 +86,7 @@ class WeightedPhysicsLoss(nn.Module):
         
         self.fixed_focal_length = fixed_focal_length
         self.fixed_wavelength = fixed_wavelength
+        self.window_size = window_size
         self.mse = nn.MSELoss()
 
     def forward(self, pred_params, true_params, input_images):
@@ -133,16 +135,17 @@ class WeightedPhysicsLoss(nn.Module):
         grid_y = grid_y.unsqueeze(0).expand(B, -1, -1) # (B, H, W)
 
         # Physical coordinates
-        # X = xc + fov * grid_x_normalized
-        X_phys = xc.view(B, 1, 1) + fov.view(B, 1, 1) * grid_x
-        Y_phys = yc.view(B, 1, 1) + fov.view(B, 1, 1) * grid_y
+        # X = xc + window_size * grid_x_normalized
+        # Window is centered at xc, yc
+        X_phys = xc.view(B, 1, 1) + self.window_size * grid_x
+        Y_phys = yc.view(B, 1, 1) + self.window_size * grid_y
 
         # Broadcast focal_length and wavelength to (B, 1, 1) for physics formula
         focal_length = focal_length.view(B, 1, 1)
         wavelength = wavelength.view(B, 1, 1)
 
         # Forward Model
-        phi_unwrapped = compute_hyperbolic_phase(X_phys, Y_phys, focal_length, wavelength)
+        phi_unwrapped = compute_hyperbolic_phase(X_phys, Y_phys, focal_length, wavelength, theta=fov)
         phi_wrapped = wrap_phase(phi_unwrapped)
         reconstructed_image = get_2channel_representation(phi_wrapped) # (B, H, W, 2)
         

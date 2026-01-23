@@ -28,17 +28,20 @@ def generate_single_sample(N,
                            fov,
                            focal_length=FOCAL_LENGTH,
                            wavelength=WAVELENGTH,
-                           noise_std=0.0):
+                           noise_std=0.0,
+                           window_size=100.0):
     """
     Generate one synthetic sample using the centralized forward model.
+    fov is now treated as incident angle in degrees.
+    window_size is the physical width of the patch in micrometers.
     """
     # Coordinate grids in physical units
-    x_coords = np.linspace(xc - fov / 2.0, xc + fov / 2.0, N, dtype=np.float32)
-    y_coords = np.linspace(yc - fov / 2.0, yc + fov / 2.0, N, dtype=np.float32)
+    x_coords = np.linspace(xc - window_size / 2.0, xc + window_size / 2.0, N, dtype=np.float32)
+    y_coords = np.linspace(yc - window_size / 2.0, yc + window_size / 2.0, N, dtype=np.float32)
     X_grid, Y_grid = np.meshgrid(x_coords, y_coords)
 
-    # 1. Physics: Compute unwrapped phase
-    phi_unwrapped = compute_hyperbolic_phase(X_grid, Y_grid, focal_length, wavelength)
+    # 1. Physics: Compute unwrapped phase (passing fov as theta)
+    phi_unwrapped = compute_hyperbolic_phase(X_grid, Y_grid, focal_length, wavelength, theta=fov)
 
     # 2. Augmentation: Add noise in phase domain
     if noise_std > 0.0:
@@ -107,8 +110,9 @@ def generate_grid_dataset(xc_count,
                           xc_range=(-500.0, 500.0),
                           yc_range=(-500.0, 500.0),
                           fov_range=(1.0, 20.0),
-                          wavelength_range=(400e-9, 700e-9),
-                          focal_length_range=(10e-6, 100e-6),
+                          wavelength_range=(0.4, 0.7),
+                           focal_length_range=(10.0, 100.0),
+                          window_size=100.0,
                           N=128,
                           noise_std=0.0,
                           grid_strategy="mean",
@@ -164,7 +168,8 @@ def generate_grid_dataset(xc_count,
                 fov=fov,
                 focal_length=focal_length,
                 wavelength=wavelength,
-                noise_std=noise_std
+                noise_std=noise_std,
+                window_size=window_size
             )
 
             X[idx] = inp
@@ -194,8 +199,9 @@ class OnTheFlyDataset(Dataset):
         self.xc_range = tuple(config.get("xc_range", [-500.0, 500.0]))
         self.yc_range = tuple(config.get("yc_range", [-500.0, 500.0]))
         self.fov_range = tuple(config.get("fov_range", [10.0, 80.0]))
-        self.wavelength_range = tuple(config.get("wavelength_range", [400e-9, 700e-9]))
-        self.focal_length_range = tuple(config.get("focal_length_range", [10e-6, 100e-6]))
+        self.wavelength_range = tuple(config.get("wavelength_range", [0.4, 0.7]))
+        self.focal_length_range = tuple(config.get("focal_length_range", [10.0, 100.0]))
+        self.window_size = config.get("window_size", 100.0)
         self.noise_std = config.get("noise_std", 0.0)
         
     def __len__(self):
@@ -216,7 +222,8 @@ class OnTheFlyDataset(Dataset):
             fov=fov,
             focal_length=focal_length,
             wavelength=wavelength,
-            noise_std=self.noise_std
+            noise_std=self.noise_std,
+            window_size=self.window_size
         )
         
         # inp is (H, W, 2), convert to (2, H, W) for PyTorch
@@ -236,9 +243,10 @@ class GridDataset(Dataset):
         xc_range = tuple(config.get("xc_range", [-500.0, 500.0]))
         yc_range = tuple(config.get("yc_range", [-500.0, 500.0]))
         fov_range = tuple(config.get("fov_range", [1.0, 20.0]))
-        wavelength_range = tuple(config.get("wavelength_range", [400e-9, 700e-9]))
-        focal_length_range = tuple(config.get("focal_length_range", [10e-6, 100e-6]))
+        wavelength_range = tuple(config.get("wavelength_range", [0.4, 0.7]))
+        focal_length_range = tuple(config.get("focal_length_range", [10.0, 100.0]))
         grid_strategy = config.get("grid_strategy", "mean")
+        window_size = config.get("window_size", 100.0)
         noise_std = config.get("noise_std", 0.0)
         
         self.X, self.y, self.metadata = generate_grid_dataset(
@@ -252,6 +260,7 @@ class GridDataset(Dataset):
             N=self.N,
             noise_std=noise_std,
             grid_strategy=grid_strategy,
+            window_size=window_size,
             offset=offset,
             seed=seed
         )

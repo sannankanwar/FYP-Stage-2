@@ -40,9 +40,9 @@ def visualize_sample(input_tensor, true_params, pred_params, loss, title, output
     if len(true_params) == 5:
         info_text = (
             f"TRUE: xc={true_params[0]:.2f}, yc={true_params[1]:.2f}, fov={true_params[2]:.2f}\n"
-            f"      wl={true_params[3]*1e9:.1f}nm, f={true_params[4]*1e6:.1f}um\n"
+            f"      wl={true_params[3]*1000:.1f}nm, f={true_params[4]:.1f}um\n"
             f"PRED: xc={pred_params[0]:.2f}, yc={pred_params[1]:.2f}, fov={pred_params[2]:.2f}\n"
-            f"      wl={pred_params[3]*1e9:.1f}nm, f={pred_params[4]*1e6:.1f}um"
+            f"      wl={pred_params[3]*1000:.1f}nm, f={pred_params[4]:.1f}um"
         )
     else:
         info_text = (
@@ -218,8 +218,8 @@ def evaluate_grid(checkpoint_path, output_dir, device="cpu", steps=25):
     xc_range = tuple(config.get("xc_range", (-500.0, 500.0)))
     yc_range = tuple(config.get("yc_range", (-500.0, 500.0)))
     fov_range = tuple(config.get("fov_range", (1.0, 20.0))) # Support 5p range
-    wavelength_range = tuple(config.get("wavelength_range", (400e-9, 700e-9)))
-    focal_length_range = tuple(config.get("focal_length_range", (10e-6, 100e-6)))
+    wavelength_range = tuple(config.get("wavelength_range", (0.4, 0.7)))
+    focal_length_range = tuple(config.get("focal_length_range", (10.0, 100.0)))
 
     X, y, metadata = generate_grid_dataset(
         xc_count=steps,
@@ -246,8 +246,8 @@ def evaluate_grid(checkpoint_path, output_dir, device="cpu", steps=25):
             'xc': tuple(config.get("xc_range", (-500.0, 500.0))),
             'yc': tuple(config.get("yc_range", (-500.0, 500.0))),
             'fov': tuple(config.get("fov_range", (10.0, 80.0))),
-            'wavelength': tuple(config.get("wavelength_range", (400e-9, 700e-9))),
-            'focal_length': tuple(config.get("focal_length_range", (10e-6, 100e-6)))
+            'wavelength': tuple(config.get("wavelength_range", (0.4, 0.7))),
+            'focal_length': tuple(config.get("focal_length_range", (10.0, 100.0)))
         }
         normalizer = ParameterNormalizer(norm_ranges)
     
@@ -302,8 +302,8 @@ def evaluate_grid(checkpoint_path, output_dir, device="cpu", steps=25):
     plt.colorbar(im, label='MSE Loss')
     
     plt.title(f"Loss Heatmap (FOV={metadata['fov']:.1f})\n{config.get('experiment_name', 'Unknown Experiment')}")
-    plt.xlabel('XC (micrometers)')
-    plt.ylabel('YC (micrometers)')
+    plt.xlabel('XC (um)')
+    plt.ylabel('YC (um)')
     
     output_plot_path = os.path.join(output_dir, "evaluation_heatmap.png")
     plt.savefig(output_plot_path)
@@ -330,6 +330,7 @@ def evaluate_grid(checkpoint_path, output_dir, device="cpu", steps=25):
     max_idx = np.argmax(mse_per_sample)
     
     print(f"Saving Best Case (Index {min_idx}, Loss {mse_per_sample[min_idx]:.6f})...")
+    print(f"Best Case Params: True={y[min_idx]}, Pred={predictions[min_idx].numpy()}")
     visualize_sample(
         X[min_idx], 
         y[min_idx], 
@@ -340,6 +341,7 @@ def evaluate_grid(checkpoint_path, output_dir, device="cpu", steps=25):
     )
     
     print(f"Saving Worst Case (Index {max_idx}, Loss {mse_per_sample[max_idx]:.6f})...")
+    print(f"Worst Case Params: True={y[max_idx]}, Pred={predictions[max_idx].numpy()}")
     visualize_sample(
         X[max_idx], 
         y[max_idx], 

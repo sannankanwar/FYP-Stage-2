@@ -10,7 +10,7 @@ class InverseMetalensModel(nn.Module):
         self.input_channels = input_channels + 2 
         
         # We modify the first layer to accept our custom channel count (4 instead of 3)
-        self.backbone = resnet18(pretrained=False) # False because we change input structure
+        self.backbone = resnet18(weights=None) # weights=None replaces deprecated pretrained=False 
         
         # Replace the first conv layer to handle (Cos, Sin, X, Y)
         # Standard ResNet: nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False)

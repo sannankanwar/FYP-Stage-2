@@ -48,6 +48,8 @@ def main():
     print(f"Model Architecture: {model_name}")
     print(f"Input Resolution: {res}x{res}")
     print(f"Epochs: {full_config.get('epochs', 10)}")
+    print(f"Wavelength Range: {full_config.get('wavelength_range')}")
+    print(f"Focal Length Range: {full_config.get('focal_length_range')}")
     print(f"-----------------------------")
 
     print("Initializing Data Loaders...")

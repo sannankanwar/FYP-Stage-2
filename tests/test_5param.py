@@ -9,7 +9,7 @@ import numpy as np
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 from src.models.factory import get_model
-from src.training.loss import PhysicsInformedLoss
+from src.training.loss import WeightedPhysicsLoss
 from src.utils.normalization import ParameterNormalizer
 from data.loaders.simulation import OnTheFlyDataset
 from src.utils.config import load_config
@@ -84,9 +84,10 @@ def test_5param_pipeline():
     
     # 5. Test Loss Function
     print("\nTesting PhysicsInformedLoss...")
-    loss_fn = PhysicsInformedLoss(
+    loss_fn = WeightedPhysicsLoss(
         lambda_param=1.0, 
         lambda_physics=0.1, 
+        window_size=test_config.get('window_size', 100.0),
         normalizer=normalizer
     )
     

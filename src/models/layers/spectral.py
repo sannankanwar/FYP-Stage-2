@@ -23,8 +23,8 @@ class SpectralGating2d(nn.Module):
         self.modes1 = modes1
         self.modes2 = modes2
 
-        # Scale factor for initialization
-        self.scale = (1 / (in_channels * out_channels))
+        # Scale factor for initialization: 1/in_channels is more stable for large layers
+        self.scale = (1 / in_channels)
         
         # Learnable complex weights
         # We only learn the lower frequency modes (low-pass filtering inductive bias)

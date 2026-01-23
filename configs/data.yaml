@@ -13,11 +13,14 @@ num_workers: 4
 # Field of View (Degrees): 1 to 20
 fov_range: [1.0, 20.0]
 
-# Wavelength: 400nm to 700nm (Visible)
-wavelength_range: [400.0e-9, 700.0e-9]
+# Window Size (micrometers): Size of the imaged patch
+window_size: 100.0
 
-# Focal Length: 10um to 100um
-focal_length_range: [10.0e-6, 100.0e-6]
+# Wavelength: 400nm to 700nm (micrometers)
+wavelength_range: [0.4, 0.7]
+
+# Focal Length: 10um to 100um (micrometers)
+focal_length_range: [10.0, 100.0]
 
 # Data Generation Strategy
 grid_strategy: "mean" # "mean" (fix constants to avg) or "random_fixed" (randomize constants once)

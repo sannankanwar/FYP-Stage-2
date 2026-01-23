@@ -80,6 +80,7 @@ class Trainer:
                 lambda_param=l_param,
                 lambda_physics=l_physics,
                 param_weights=weights,
+                window_size=config.get("window_size", 100.0),
                 normalizer=self.normalizer
             )
         else:

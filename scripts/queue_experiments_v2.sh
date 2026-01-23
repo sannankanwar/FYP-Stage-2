@@ -26,18 +26,48 @@ configs=(
 )
 
 for config in "${configs[@]}"; do
+    # Extract experiment name from filename (e.g., exp01_resnet_baseline)
+    exp_name=$(basename "$config" .yaml)
+    exp_dir="outputs_2/$exp_name"
+    log_dir="$exp_dir/logs"
+    
+    mkdir -p "$log_dir"
+    
     echo "----------------------------------------------------------------"
-    echo "Running Experiment: $config"
+    echo "Running Experiment: $exp_name"
+    echo "Log: $log_dir/output.log"
     echo "----------------------------------------------------------------"
     
-    uv run scripts/train.py --config "$config"
+    # 1. Run Training (Redirect output to experiment-specific log)
+    uv run scripts/train.py --config "$config" | tee "$log_dir/output.log"
     
     if [ $? -ne 0 ]; then
-        echo "Error running $config. Stopping queue."
-        exit 1
+        echo "Error running $config. Skipping to next or stopping?"
+        # exit 1 # Optional: stop on failure
     fi
     
-    echo "Finished $config"
+    # 2. Post-Training Visualization (Automated)
+    echo "Generating Reports for $exp_name..."
+    
+    # Loss Curves (Full: 0-100)
+    uv run python scripts/plot_loss.py "$log_dir/output.log" \
+        --output "$exp_dir/loss_plot_full.png" \
+        --title "$exp_name: Full Training Process"
+        
+    # Loss Curves (Zoomed: 50-100)
+    uv run python scripts/plot_loss.py "$log_dir/output.log" \
+        --output "$exp_dir/loss_plot_zoomed.png" \
+        --min-epoch 50 \
+        --title "$exp_name: Convergence Convergence (Last 50 Epochs)"
+
+    # Scatter Plots & Error Analysis
+    uv run python scripts/evaluate.py --experiment_dir "$exp_dir"
+    
+    # Phase Reconstruction Visualization
+    uv run python scripts/visualize_reconstruction.py --experiment_dir "$exp_dir"
+    
+    echo "Finished $exp_name. Artifacts saved to $exp_dir"
+    echo ""
     sleep 5
 done
 

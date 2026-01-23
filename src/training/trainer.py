@@ -102,7 +102,7 @@ class Trainer:
         
         # Paths
         experiment_name = config.get("experiment_name", "default_experiment")
-        self.experiment_dir = os.path.join("outputs", experiment_name)
+        self.experiment_dir = os.path.join("outputs_2", experiment_name)
         self.checkpoint_dir = os.path.join(self.experiment_dir, "checkpoints")
         self.log_dir = os.path.join(self.experiment_dir, "logs")
         self.snapshot_dir = os.path.join(self.experiment_dir, "snapshots") # New

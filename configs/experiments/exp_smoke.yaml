@@ -1,0 +1,14 @@
+
+experiment_name: "test_smoke_v2"
+description: "End-to-end smoke test"
+epochs: 2
+batch_size: 2
+learning_rate: 0.001
+optimizer: "adam"
+standardize_outputs: true
+loss_function: "weighted_standardized"
+loss_weights: [1, 1, 1, 10, 10]
+model:
+  name: "spectral_resnet"
+  modes: 2
+  resolution: 64

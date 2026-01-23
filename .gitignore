@@ -23,6 +23,7 @@ build/
 # Data and Outputs
 real_data/
 outputs/
+outputs_2/
 
 # VS Code
 .vscode/

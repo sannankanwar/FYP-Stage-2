@@ -214,19 +214,23 @@ def evaluate_grid(checkpoint_path, output_dir, device="cpu", steps=25):
 
     # 2. Generate Grid Dataset
     print(f"Generating Evaluation Grid ({steps}x{steps})...")
-    # Define range relative to what we trained on? Or standard [-500, 500].
-    # Let's use standard range for consistent comparison.
-    xc_range = (-500.0, 500.0)
-    yc_range = (-500.0, 500.0)
-    fixed_fov = 45.0 # Evaluate at a fixed FOV in the middle of range [10, 80]
-    
+    # Pull ranges from config or defaults
+    xc_range = tuple(config.get("xc_range", (-500.0, 500.0)))
+    yc_range = tuple(config.get("yc_range", (-500.0, 500.0)))
+    fov_range = tuple(config.get("fov_range", (1.0, 20.0))) # Support 5p range
+    wavelength_range = tuple(config.get("wavelength_range", (400e-9, 700e-9)))
+    focal_length_range = tuple(config.get("focal_length_range", (10e-6, 100e-6)))
+
     X, y, metadata = generate_grid_dataset(
         xc_count=steps,
         yc_count=steps,
-        fov=fixed_fov,
         xc_range=xc_range,
         yc_range=yc_range,
-        N=resolution
+        fov_range=fov_range,
+        wavelength_range=wavelength_range,
+        focal_length_range=focal_length_range,
+        N=resolution,
+        grid_strategy="mean" # Consistent with training anchor
     )
     
     # Initialize Normalizer if needed
@@ -297,7 +301,7 @@ def evaluate_grid(checkpoint_path, output_dir, device="cpu", steps=25):
     im = plt.imshow(mse_grid.T, origin='lower', extent=extent, cmap='viridis', aspect='auto', interpolation='nearest')
     plt.colorbar(im, label='MSE Loss')
     
-    plt.title(f"Loss Heatmap (FOV={fixed_fov})\n{config.get('experiment_name', 'Unknown Experiment')}")
+    plt.title(f"Loss Heatmap (FOV={metadata['fov']:.1f})\n{config.get('experiment_name', 'Unknown Experiment')}")
     plt.xlabel('XC (micrometers)')
     plt.ylabel('YC (micrometers)')
     

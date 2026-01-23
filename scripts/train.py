@@ -26,24 +26,29 @@ def main():
     model_config = load_config(args.model_config)
     data_config = load_config(args.data_config)
     
-    # Merge configs for convenience or keep separate?
-    # Trainer expects one config dict mostly for hyperparameters.
-    # Let's pass the merged training config + relevant bits.
+    # Merge configs for convenience. Priority: train_config > model_config > data_config
+    full_config = data_config.copy()
+    full_config.update(model_config)
+    full_config.update(train_config)
     
-    # Flatten config if nested (experiments format)
-    full_config = data_config.copy() # Start with data defaults
-    full_config.update(model_config) # Add model info
-    full_config.update(train_config) # Add/Override with training specifics
-    
-    if 'training' in train_config:
-        print("Detected nested config structure. Flattening 'training' section...")
-        full_config.update(train_config['training'])
-    if 'data' in train_config:
-        full_config.update(train_config['data'])
-    if 'model' in train_config:
+    # Explicitly flatten nested model/data sections from the experiment config
+    if 'model' in train_config and isinstance(train_config['model'], dict):
         full_config.update(train_config['model'])
+    if 'data' in train_config and isinstance(train_config['data'], dict):
+        full_config.update(train_config['data'])
+    if 'training' in train_config and isinstance(train_config['training'], dict):
+        full_config.update(train_config['training'])
         
-    print(f"Training for {full_config.get('epochs', 10)} epochs (Configured).")
+    # Final check on critical parameters
+    model_name = full_config.get('name', 'spectral_resnet')
+    res = full_config.get('resolution', 256)
+    
+    print(f"--- Configuration Summary ---")
+    print(f"Experiment: {full_config.get('experiment_name', 'Unnamed')}")
+    print(f"Model Architecture: {model_name}")
+    print(f"Input Resolution: {res}x{res}")
+    print(f"Epochs: {full_config.get('epochs', 10)}")
+    print(f"-----------------------------")
 
     print("Initializing Data Loaders...")
     # Train Dataset

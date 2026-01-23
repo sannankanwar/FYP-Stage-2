@@ -55,15 +55,17 @@ class SpectralGating2d(nn.Module):
         # Init output spectrum
         out_ft = torch.zeros(batchsize, self.out_channels, x.size(-2), x.size(-1)//2 + 1, dtype=torch.cfloat, device=x.device)
         
+        # Clip modes if input resolution is smaller than expected modes
+        m1 = min(self.modes1, x_ft.size(-2) // 2)
+        m2 = min(self.modes2, x_ft.size(-1))
+        
         # Upper-Left corner (Low freqs in H, Low freqs in W)
-        out_ft[:, :, :self.modes1, :self.modes2] = \
-            self.compl_mul2d(x_ft[:, :, :self.modes1, :self.modes2], self.weights1)
+        out_ft[:, :, :m1, :m2] = \
+            self.compl_mul2d(x_ft[:, :, :m1, :m2], self.weights1[:, :, :m1, :m2])
             
         # Lower-Left corner (High freqs in H - aliased negative, Low freqs in W)
-        # Note: In standard FNO implementations, they often process these two corners.
-        # For simplicity and ensuring we catch the relevant corners for RFFT:
-        out_ft[:, :, -self.modes1:, :self.modes2] = \
-            self.compl_mul2d(x_ft[:, :, -self.modes1:, :self.modes2], self.weights2)
+        out_ft[:, :, -m1:, :m2] = \
+            self.compl_mul2d(x_ft[:, :, -m1:, :m2], self.weights2[:, :, :m1, :m2])
 
         # 3. IFFT
         x = torch.fft.irfft2(out_ft, s=(x.size(-2), x.size(-1)))

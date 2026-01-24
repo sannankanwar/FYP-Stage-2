@@ -6,7 +6,6 @@ import time
 import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
-from data.loaders.simulation import GridDataset
 from torch.utils.data import DataLoader
 from src.training.loss import Naive5ParamMSELoss, WeightedStandardizedLoss, WeightedPhysicsLoss
 from src.utils.normalization import ParameterNormalizer
@@ -87,15 +86,8 @@ class Trainer:
             print(f"Using Standard MSELoss (Fallback for '{loss_name}')")
             self.criterion = nn.MSELoss()
         
-        # Fixed Grid Loader for Alternating Epochs
-        # 10x10 Grid for Training Anchor
-        self.fixed_train_dataset = GridDataset(config, steps=10, offset=False) 
-        self.fixed_train_loader = DataLoader(
-            self.fixed_train_dataset,
-            batch_size=config.get("batch_size", 32),
-            shuffle=True
-        )
-        print(f"Initialized Fixed Anchor Grid: {len(self.fixed_train_dataset)} samples")
+        # NOTE: Removed fixed anchor grid methodology
+        # Training now uses only random on-the-fly data for all epochs
 
         # Training State
         self.start_epoch = 0
@@ -128,15 +120,9 @@ class Trainer:
         for epoch in range(self.start_epoch, epochs):
             start_time = time.time()
             
-            # Alternating Strategy
-            # Odd Epochs (1, 3, ...): Random Data (on-the-fly) - Note epoch starts at 0
-            # Even Epochs (0, 2, ...): Fixed Grid Data
-            if epoch % 2 == 0:
-                print(f"--- Epoch {epoch+1} (Random Data) ---")
-                active_loader = self.train_loader
-            else:
-                print(f"--- Epoch {epoch+1} (Fixed Grid Anchor) ---")
-                active_loader = self.fixed_train_loader
+            # All epochs use random on-the-fly data
+            print(f\"--- Epoch {epoch+1} (Random Data) ---\")
+            active_loader = self.train_loader
             
             train_loss = self._train_epoch(epoch, active_loader, log_interval)
             

@@ -121,7 +121,7 @@ class Trainer:
             start_time = time.time()
             
             # All epochs use random on-the-fly data
-            print(f\"--- Epoch {epoch+1} (Random Data) ---\")
+            print(f"--- Epoch {epoch+1} (Random Data) ---")
             active_loader = self.train_loader
             
             train_loss = self._train_epoch(epoch, active_loader, log_interval)

@@ -1,0 +1,26 @@
+# Phase 2 B07: FNO-ResNet18 + AdamW + Cosine
+experiment_name: "exp2_B07_resnet18_adamw_cosine"
+description: "Optimizer sweep: FNO-ResNet18 with AdamW and Cosine Annealing."
+
+model:
+  name: "fno_resnet18"
+  output_dim: 5
+  modes: 32
+
+training:
+  epochs: 250
+  batch_size: 32
+  learning_rate: 0.001
+  optimizer: "adamw"
+  weight_decay: 0.01
+  scheduler: "cosine"
+
+data:
+  resolution: 256
+  train_samples: 2000
+  val_samples: 400
+
+grid_strategy: "random_all"
+standardize_outputs: true
+loss_function: "weighted_standardized"
+loss_weights: [1.0, 1.0, 1.0, 10.0, 10.0]

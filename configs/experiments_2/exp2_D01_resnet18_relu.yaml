@@ -1,0 +1,26 @@
+# Phase 4 D01: FNO-ResNet18 + ReLU
+experiment_name: "exp2_D01_resnet18_relu"
+description: "Activation sweep: FNO-ResNet18 with ReLU activation (baseline)."
+
+model:
+  name: "fno_resnet18"
+  output_dim: 5
+  modes: 32
+
+training:
+  epochs: 250
+  batch_size: 32
+  learning_rate: 0.001
+  optimizer: "adam"
+  scheduler: "plateau"
+  scheduler_patience: 15
+
+data:
+  resolution: 256
+  train_samples: 2000
+  val_samples: 400
+
+grid_strategy: "random_all"
+standardize_outputs: true
+loss_function: "weighted_standardized"
+loss_weights: [1.0, 1.0, 1.0, 10.0, 10.0]

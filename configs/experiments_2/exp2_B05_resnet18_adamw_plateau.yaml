@@ -1,0 +1,27 @@
+# Phase 2 B05: FNO-ResNet18 + AdamW + Plateau
+experiment_name: "exp2_B05_resnet18_adamw_plateau"
+description: "Optimizer sweep: FNO-ResNet18 with AdamW (weight decay) and Plateau scheduler."
+
+model:
+  name: "fno_resnet18"
+  output_dim: 5
+  modes: 32
+
+training:
+  epochs: 250
+  batch_size: 32
+  learning_rate: 0.001
+  optimizer: "adamw"
+  weight_decay: 0.01
+  scheduler: "plateau"
+  scheduler_patience: 15
+
+data:
+  resolution: 256
+  train_samples: 2000
+  val_samples: 400
+
+grid_strategy: "random_all"
+standardize_outputs: true
+loss_function: "weighted_standardized"
+loss_weights: [1.0, 1.0, 1.0, 10.0, 10.0]

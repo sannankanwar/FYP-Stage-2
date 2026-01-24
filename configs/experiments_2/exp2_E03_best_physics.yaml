@@ -1,0 +1,29 @@
+# Phase 5 E03: Best Config Validation - Best overall with physics loss
+experiment_name: "exp2_E03_best_physics"
+description: "Final validation: Best model with physics-informed loss."
+
+model:
+  name: "fno_unet"  # Replace with best performer
+  output_dim: 5
+  modes: 32
+
+training:
+  epochs: 250
+  batch_size: 16
+  learning_rate: 0.001
+  optimizer: "adam"
+  scheduler: "plateau"
+  scheduler_patience: 15
+  save_every: 10
+
+data:
+  resolution: 256
+  train_samples: 4000
+  val_samples: 1000
+
+grid_strategy: "random_all"
+standardize_outputs: true
+loss_function: "weighted_physics"
+loss_weights: [1.0, 1.0, 1.0, 10.0, 10.0]
+lambda_param: 1.0
+lambda_physics: 0.1

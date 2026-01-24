@@ -1,0 +1,24 @@
+# FNO-VGG19 Experiment
+experiment_name: "exp_fno_vgg19"
+description: "VGG19 backbone with Fourier Neural Operator for global spectral mixing."
+
+model:
+  name: "fno_vgg19"
+  output_dim: 5
+  modes: 32
+  fno_norm: "instance"
+  fno_activation: "gelu"
+
+training:
+  epochs: 100
+  batch_size: 16
+  learning_rate: 0.0005
+  optimizer: "adam"
+  scheduler: "plateau"
+
+data:
+  resolution: 256
+
+standardize_outputs: true
+loss_function: "weighted_standardized"
+loss_weights: [1.0, 1.0, 1.0, 10.0, 10.0]

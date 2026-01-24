@@ -1,13 +1,8 @@
 experiment_name: "exp10_pinn_tanh"
 description: "Spectral ResNet with Tanh activation and Physics-Informed Loss."
 model:
-  type: "spectral_resnet"
+  name: "spectral_resnet"
   activation: "tanh"
-
-data:
-  batch_size: 32
-  focal_length: 20e-6
-  wavelength: 633e-9
 
 training:
   epochs: 100

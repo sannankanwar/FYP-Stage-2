@@ -1,0 +1,23 @@
+# GAN Inverter Experiment
+# NOTE: GAN training requires a custom training loop with adversarial loss.
+# Use this config with a modified trainer or the standard trainer for baseline comparison.
+experiment_name: "exp_gan_inverter"
+description: "GAN-based inverter for metalens parameters. Uses generator for inference."
+
+model:
+  name: "gan_inverter"
+  output_dim: 5
+
+training:
+  epochs: 100
+  batch_size: 32
+  learning_rate: 0.0002  # Standard GAN learning rate
+  optimizer: "adam"
+  scheduler: null  # No scheduler for GAN stability
+
+data:
+  resolution: 256
+
+standardize_outputs: true
+loss_function: "weighted_standardized"
+loss_weights: [1.0, 1.0, 1.0, 10.0, 10.0]

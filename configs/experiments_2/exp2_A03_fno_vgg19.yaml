@@ -1,0 +1,26 @@
+# Phase 1 A03: FNO-VGG19 Baseline
+experiment_name: "exp2_A03_fno_vgg19"
+description: "Architecture comparison: FNO-VGG19 - deeper features, no residual connections."
+
+model:
+  name: "fno_vgg19"
+  output_dim: 5
+  modes: 32
+
+training:
+  epochs: 250
+  batch_size: 16
+  learning_rate: 0.0005
+  optimizer: "adam"
+  scheduler: "plateau"
+  scheduler_patience: 15
+
+data:
+  resolution: 256
+  train_samples: 2000
+  val_samples: 400
+
+grid_strategy: "random_all"
+standardize_outputs: true
+loss_function: "weighted_standardized"
+loss_weights: [1.0, 1.0, 1.0, 10.0, 10.0]

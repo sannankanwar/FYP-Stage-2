@@ -1,0 +1,26 @@
+# Phase 3 C01: FNO-ResNet18 + No Physics (Baseline)
+experiment_name: "exp2_C01_resnet18_no_physics"
+description: "Physics loss ablation: FNO-ResNet18 with parameter loss only (no physics)."
+
+model:
+  name: "fno_resnet18"
+  output_dim: 5
+  modes: 32
+
+training:
+  epochs: 250
+  batch_size: 32
+  learning_rate: 0.001
+  optimizer: "adam"
+  scheduler: "plateau"
+  scheduler_patience: 15
+
+data:
+  resolution: 256
+  train_samples: 2000
+  val_samples: 400
+
+grid_strategy: "random_all"
+standardize_outputs: true
+loss_function: "weighted_standardized"
+loss_weights: [1.0, 1.0, 1.0, 10.0, 10.0]

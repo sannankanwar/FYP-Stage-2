@@ -1,11 +1,13 @@
 experiment_name: "experiment5_spectral_muon"
 description: "Spectral model with Muon optimizer"
 seed: 42
-epochs: 100
+epochs: 2
 learning_rate: 0.02 # Muon typically uses higher LR
 optimizer: "muon"
 scheduler: "plateau" # Good to keep scheduler for fine tuning
 scheduler_patience: 15
 scheduler_factor: 0.5
-loss_function: "mse"
 log_interval: 10
+standardize_outputs: true
+loss_function: "weighted_standardized"
+loss_weights: [1.0, 1.0, 1.0, 1.0, 1.0]

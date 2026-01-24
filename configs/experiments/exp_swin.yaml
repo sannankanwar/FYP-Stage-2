@@ -1,0 +1,26 @@
+# Swin Transformer Experiment
+experiment_name: "exp_swin"
+description: "Swin Transformer for metalens parameter inversion."
+
+model:
+  name: "swin"
+  output_dim: 5
+  embed_dim: 96
+  depths: [2, 2, 6, 2]
+  num_heads: [3, 6, 12, 24]
+  window_size: 8
+  patch_size: 4
+
+training:
+  epochs: 100
+  batch_size: 16
+  learning_rate: 0.0001  # Lower LR for transformers
+  optimizer: "adam"
+  scheduler: "plateau"
+
+data:
+  resolution: 256
+
+standardize_outputs: true
+loss_function: "weighted_standardized"
+loss_weights: [1.0, 1.0, 1.0, 10.0, 10.0]

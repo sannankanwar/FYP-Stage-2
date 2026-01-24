@@ -1,0 +1,30 @@
+# Phase 1 A05: Swin Transformer Baseline
+experiment_name: "exp2_A05_swin"
+description: "Architecture comparison: Swin Transformer - attention-based with window partitioning."
+
+model:
+  name: "swin"
+  output_dim: 5
+  embed_dim: 96
+  depths: [2, 2, 6, 2]
+  num_heads: [3, 6, 12, 24]
+  window_size: 8
+  patch_size: 4
+
+training:
+  epochs: 250
+  batch_size: 16
+  learning_rate: 0.0001
+  optimizer: "adam"
+  scheduler: "cosine"
+
+data:
+  resolution: 256
+  train_samples: 2000
+  val_samples: 400
+
+grid_strategy: "random_all"
+standardize_outputs: true
+loss_function: "weighted_standardized"
+loss_weights: [1.0, 1.0, 1.0, 10.0, 10.0]
+activation: "gelu"

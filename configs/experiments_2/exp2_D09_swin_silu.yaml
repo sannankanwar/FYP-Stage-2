@@ -1,0 +1,30 @@
+# Phase 4 D09: Swin Transformer + SiLU
+experiment_name: "exp2_D09_swin_silu"
+description: "Activation sweep: Swin Transformer with SiLU activation."
+
+model:
+  name: "swin"
+  output_dim: 5
+  embed_dim: 96
+  depths: [2, 2, 6, 2]
+  num_heads: [3, 6, 12, 24]
+  window_size: 8
+  patch_size: 4
+
+training:
+  epochs: 250
+  batch_size: 16
+  learning_rate: 0.0001
+  optimizer: "adam"
+  scheduler: "cosine"
+
+data:
+  resolution: 256
+  train_samples: 2000
+  val_samples: 400
+
+grid_strategy: "random_all"
+standardize_outputs: true
+loss_function: "weighted_standardized"
+loss_weights: [1.0, 1.0, 1.0, 10.0, 10.0]
+activation: "silu"

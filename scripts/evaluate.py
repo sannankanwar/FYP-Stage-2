@@ -245,7 +245,7 @@ def evaluate_grid(checkpoint_path, output_dir, device="cpu", steps=25):
         norm_ranges = {
             'xc': tuple(config.get("xc_range", (-500.0, 500.0))),
             'yc': tuple(config.get("yc_range", (-500.0, 500.0))),
-            'fov': tuple(config.get("fov_range", (10.0, 80.0))),
+            'fov': tuple(config.get("fov_range", (1.0, 20.0))),
             'wavelength': tuple(config.get("wavelength_range", (0.4, 0.7))),
             'focal_length': tuple(config.get("focal_length_range", (10.0, 100.0)))
         }

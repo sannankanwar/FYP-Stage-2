@@ -70,7 +70,7 @@ def generate_dataset(N,
                      num_samples,
                      xc_range=(-500.0, 500.0),
                      yc_range=(-500.0, 500.0),
-                     fov_range=(10.0, 80.0),
+                     fov_range=(1.0, 20.0),
                      focal_length=FOCAL_LENGTH,
                      wavelength=WAVELENGTH,
                      noise_std=0.0,
@@ -123,13 +123,55 @@ def generate_grid_dataset(xc_count,
     
     Args:
         xc_count, yc_count (int): Grid steps.
-        grid_strategy (str): "mean" (use center of ranges) or "random_fixed" (randomize once).
+        grid_strategy (str): 
+            - "mean": Fix fov/wl/fl to center of ranges (only test xc/yc)
+            - "random_fixed": Randomize fov/wl/fl once (still only tests xc/yc)
+            - "random_all": Randomize ALL 5 parameters per sample (true 5-param eval)
         offset (bool): If True, shift grid by 0.5 * step_size (Validation Set).
     """
     if seed is not None:
         np.random.seed(seed)
+    
+    # Strategy: random_all means we ignore the grid and just sample randomly
+    if grid_strategy == "random_all":
+        num_samples = xc_count * yc_count
+        X = np.zeros((num_samples, N, N, 2), dtype=np.float32)
+        y = np.zeros((num_samples, 5), dtype=np.float32)
         
-    # 1. Determine "Constant" Parameters based on strategy
+        for idx in range(num_samples):
+            xc = np.random.uniform(*xc_range)
+            yc = np.random.uniform(*yc_range)
+            fov = np.random.uniform(*fov_range)
+            wavelength = np.random.uniform(*wavelength_range)
+            focal_length = np.random.uniform(*focal_length_range)
+            
+            inp, tgt = generate_single_sample(
+                N=N,
+                xc=xc,
+                yc=yc,
+                fov=fov,
+                focal_length=focal_length,
+                wavelength=wavelength,
+                noise_std=noise_std,
+                window_size=window_size
+            )
+            
+            X[idx] = inp
+            y[idx] = tgt
+        
+        metadata = {
+            "xc_steps": None,
+            "yc_steps": None,
+            "fov": "random",
+            "wavelength": "random",
+            "focal_length": "random",
+            "grid_shape": (xc_count, yc_count),
+            "strategy": "random_all"
+        }
+        
+        return X, y, metadata
+        
+    # Original strategies: mean or random_fixed
     if grid_strategy == "random_fixed":
         fov = np.random.uniform(*fov_range)
         wavelength = np.random.uniform(*wavelength_range)
@@ -198,7 +240,7 @@ class OnTheFlyDataset(Dataset):
         self.N = config.get("resolution", 256) # Default to 256 if not set, be careful with HighRes
         self.xc_range = tuple(config.get("xc_range", [-500.0, 500.0]))
         self.yc_range = tuple(config.get("yc_range", [-500.0, 500.0]))
-        self.fov_range = tuple(config.get("fov_range", [10.0, 80.0]))
+        self.fov_range = tuple(config.get("fov_range", [1.0, 20.0]))
         self.wavelength_range = tuple(config.get("wavelength_range", [0.4, 0.7]))
         self.focal_length_range = tuple(config.get("focal_length_range", [10.0, 100.0]))
         self.window_size = config.get("window_size", 100.0)

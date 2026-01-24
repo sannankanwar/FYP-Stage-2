@@ -12,14 +12,14 @@ model:
   patch_size: 4
 
 training:
-  epochs: 250
+  epochs: 100
   batch_size: 16
   learning_rate: 0.0001
   optimizer: "adam"
   scheduler: "cosine"
 
 data:
-  resolution: 256
+  resolution: 1024
   train_samples: 2000
   val_samples: 400
 

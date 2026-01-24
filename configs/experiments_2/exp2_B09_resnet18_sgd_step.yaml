@@ -8,7 +8,7 @@ model:
   modes: 32
 
 training:
-  epochs: 250
+  epochs: 100
   batch_size: 32
   learning_rate: 0.01
   optimizer: "sgd"
@@ -18,7 +18,7 @@ training:
   gamma: 0.5
 
 data:
-  resolution: 256
+  resolution: 1024
   train_samples: 2000
   val_samples: 400
 

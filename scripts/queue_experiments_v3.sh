@@ -30,10 +30,9 @@ for i in "${!CONFIGS[@]}"; do
     echo "=== [$((i+1))/${#CONFIGS[@]}] Starting: $EXP_NAME ===" | tee -a "$LOG_FILE"
     echo "Time: $(date)" | tee -a "$LOG_FILE"
     
-    # Run training
+    # Run training (output dir is determined by experiment_name in config)
     uv run python "$PROJECT_DIR/scripts/train.py" \
         --config "$CONFIG" \
-        --output_dir "$OUTPUT_DIR/$EXP_NAME" \
         2>&1 | tee -a "$LOG_FILE"
     
     echo "Completed: $EXP_NAME at $(date)" | tee -a "$LOG_FILE"

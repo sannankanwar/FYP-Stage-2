@@ -9,9 +9,9 @@ training:
   scheduler: plateau
   scheduler_patience: 2
   scheduler_factor: 0.5
-  standardize_outputs: true
+  standardize_outputs: false
   resolution: 1024
-  loss_function: weighted_physics
+  loss_function: raw_physics
   loss_weights: [1.0, 1.0, 1.0, 1.0, 1.0]
   lambda_param: 1.0
   lambda_physics: 0.5

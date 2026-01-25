@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
 from torch.utils.data import DataLoader
-from src.training.loss import Naive5ParamMSELoss, WeightedStandardizedLoss, WeightedPhysicsLoss, AuxiliaryPhysicsLoss
+from src.training.loss import Naive5ParamMSELoss, WeightedStandardizedLoss, WeightedPhysicsLoss, AuxiliaryPhysicsLoss, RawPhysicsLoss
 from src.utils.normalization import ParameterNormalizer
 from scripts.evaluate import plot_scatter
 
@@ -93,6 +93,15 @@ class Trainer:
                 window_size=config.get("window_size", 100.0),
                 normalizer=self.normalizer
             )
+        elif loss_name == "raw_physics":
+            print("Using RawPhysicsLoss (for HybridScaledOutput models)")
+            l_param = float(config.get("lambda_param", 1.0))
+            l_physics = float(config.get("lambda_physics", 0.5))
+            self.criterion = RawPhysicsLoss(
+                lambda_param=l_param,
+                lambda_physics=l_physics,
+                window_size=config.get("window_size", 100.0)
+            )
         else:
             print(f"Using Standard MSELoss (Fallback for '{loss_name}')")
             self.criterion = nn.MSELoss()
@@ -171,7 +180,7 @@ class Trainer:
             output = self.model(data)
             
             # Advanced Losses handle standardization internally via self.normalizer
-            if isinstance(self.criterion, (Naive5ParamMSELoss, WeightedStandardizedLoss, WeightedPhysicsLoss, AuxiliaryPhysicsLoss)):
+            if isinstance(self.criterion, (Naive5ParamMSELoss, WeightedStandardizedLoss, WeightedPhysicsLoss, AuxiliaryPhysicsLoss, RawPhysicsLoss)):
                  # These accept (pred, target, input_images)
                  loss, details = self.criterion(output, target, data)
             else:
@@ -199,7 +208,7 @@ class Trainer:
                 data, target = data.to(self.device), target.to(self.device)
                 output = self.model(data)
                 
-                if isinstance(self.criterion, (Naive5ParamMSELoss, WeightedStandardizedLoss, WeightedPhysicsLoss, AuxiliaryPhysicsLoss)):
+                if isinstance(self.criterion, (Naive5ParamMSELoss, WeightedStandardizedLoss, WeightedPhysicsLoss, AuxiliaryPhysicsLoss, RawPhysicsLoss)):
                      loss, _ = self.criterion(output, target, data)
                 else:
                     current_target = target

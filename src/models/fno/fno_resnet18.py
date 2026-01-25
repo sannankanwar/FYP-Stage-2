@@ -5,6 +5,7 @@ import torch
 import torch.nn as nn
 from torchvision.models import resnet18
 from src.models.layers.fno import FNOBlock
+from src.models.layers.scaled_output import HybridScaledOutput
 
 
 class FNOResNet18(nn.Module):
@@ -14,7 +15,9 @@ class FNOResNet18(nn.Module):
     Architecture:
         Input (2, H, W) → ResNet Stem → layer1-3 → FNO Block → layer4 → Pool → MLP → 5 params
     """
-    def __init__(self, in_channels=2, output_dim=5, modes=32, fno_norm='instance', fno_activation='gelu'):
+    def __init__(self, in_channels=2, output_dim=5, modes=32, fno_norm='instance', fno_activation='gelu',
+                 xc_range=(-500, 500), yc_range=(-500, 500), fov_range=(1, 20),
+                 wavelength_range=(0.4, 0.7), focal_length_range=(10, 100)):
         super().__init__()
         
         # Load ResNet18 backbone
@@ -45,6 +48,12 @@ class FNOResNet18(nn.Module):
             nn.Dropout(0.1),
             nn.Linear(128, output_dim)
         )
+        
+        # Scaled output layer (outputs raw physical values)
+        self.scaled_output = HybridScaledOutput(
+            xc_range=xc_range, yc_range=yc_range, fov_range=fov_range,
+            wavelength_range=wavelength_range, focal_length_range=focal_length_range
+        )
     
     def forward(self, x):
         # Stem
@@ -68,5 +77,8 @@ class FNOResNet18(nn.Module):
         x = self.avgpool(x)
         x = torch.flatten(x, 1)
         x = self.fc(x)
+        
+        # Scale to physical values
+        x = self.scaled_output(x)
         
         return x

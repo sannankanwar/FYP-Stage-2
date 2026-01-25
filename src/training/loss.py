@@ -3,6 +3,89 @@ import torch.nn as nn
 import numpy as np
 from src.inversion.forward_model import compute_hyperbolic_phase, wrap_phase, get_2channel_representation
 
+
+class RawPhysicsLoss(nn.Module):
+    """
+    Loss function for models with HybridScaledOutput (outputs raw physical values).
+    No normalization needed - directly compares raw predictions to raw targets.
+    
+    Components:
+        1. Weighted MSE on raw parameters (scale-aware weighting)
+        2. Physics reconstruction loss
+    """
+    def __init__(self, 
+                 lambda_param=1.0, 
+                 lambda_physics=0.5,
+                 window_size=100.0,
+                 # Default weights scaled inversely with parameter magnitudes
+                 param_weights=None):
+        super().__init__()
+        self.lambda_param = lambda_param
+        self.lambda_physics = lambda_physics
+        self.window_size = window_size
+        self.mse = nn.MSELoss()
+        
+        # Weights inversely proportional to typical magnitude squared
+        # This makes each param contribute equally to loss
+        if param_weights is None:
+            # xc~500, yc~500, fov~10, wavelength~0.1, focal_length~50
+            param_weights = [1/(500**2), 1/(500**2), 1/(10**2), 1/(0.15**2), 1/(45**2)]
+        self.register_buffer('weights', torch.tensor(param_weights, dtype=torch.float32))
+    
+    def forward(self, pred_params, true_params, input_images):
+        """
+        Args:
+            pred_params: (B, 5) raw physical values from model
+            true_params: (B, 5) raw physical values from dataset
+            input_images: (B, 2, H, W) input phase maps
+        """
+        # 1. Weighted Parameter Loss (scale-aware)
+        diff = pred_params - true_params  # (B, 5)
+        weighted_sq_diff = self.weights * (diff ** 2)  # Scale each param appropriately
+        loss_param = weighted_sq_diff.mean()
+        
+        # 2. Physics Reconstruction Loss
+        B, C, H, W = input_images.shape
+        device = input_images.device
+        
+        xc = pred_params[:, 0]
+        yc = pred_params[:, 1]
+        fov = pred_params[:, 2]
+        wavelength = pred_params[:, 3]
+        focal_length = pred_params[:, 4]
+        
+        # Create coordinate grids
+        grid_y, grid_x = torch.meshgrid(
+            torch.linspace(-0.5, 0.5, H, device=device),
+            torch.linspace(-0.5, 0.5, W, device=device),
+            indexing='ij'
+        )
+        grid_x = grid_x.unsqueeze(0).expand(B, -1, -1)
+        grid_y = grid_y.unsqueeze(0).expand(B, -1, -1)
+        
+        X_phys = xc.view(B, 1, 1) + self.window_size * grid_x
+        Y_phys = yc.view(B, 1, 1) + self.window_size * grid_y
+        
+        # Broadcast params to (B, 1, 1) for physics formula
+        focal_length = focal_length.view(B, 1, 1)
+        wavelength = wavelength.view(B, 1, 1)
+        fov = fov.view(B, 1, 1)
+        
+        phi_unwrapped = compute_hyperbolic_phase(X_phys, Y_phys, focal_length, wavelength, theta=fov)
+        phi_wrapped = wrap_phase(phi_unwrapped)
+        reconstructed = get_2channel_representation(phi_wrapped).permute(0, 3, 1, 2)
+        
+        loss_physics = self.mse(reconstructed, input_images)
+        
+        total_loss = (self.lambda_param * loss_param) + (self.lambda_physics * loss_physics)
+        
+        return total_loss, {
+            "loss_param": loss_param.item(),
+            "loss_physics": loss_physics.item(),
+            "total_loss": total_loss.item()
+        }
+
+
 class Naive5ParamMSELoss(nn.Module):
     """
     Simple MSE Loss on all 5 parameters.

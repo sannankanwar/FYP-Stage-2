@@ -35,6 +35,13 @@ def get_model(config):
     output_dim = config.get("output_dim", 5)
     modes = config.get("modes", 32)
     
+    # Extract parameter ranges for scaled output
+    xc_range = tuple(config.get("xc_range", [-500, 500]))
+    yc_range = tuple(config.get("yc_range", [-500, 500]))
+    fov_range = tuple(config.get("fov_range", [1, 20]))
+    wavelength_range = tuple(config.get("wavelength_range", [0.4, 0.7]))
+    focal_length_range = tuple(config.get("focal_length_range", [10, 100]))
+    
     # FNO models
     if name == "fno_resnet18":
         model = FNOResNet18(
@@ -42,7 +49,9 @@ def get_model(config):
             output_dim=output_dim, 
             modes=modes,
             fno_norm=config.get("fno_norm", "instance"),
-            fno_activation=config.get("fno_activation", "gelu")
+            fno_activation=config.get("fno_activation", "gelu"),
+            xc_range=xc_range, yc_range=yc_range, fov_range=fov_range,
+            wavelength_range=wavelength_range, focal_length_range=focal_length_range
         )
     elif name == "fno_resnet50":
         model = FNOResNet50(
@@ -50,7 +59,9 @@ def get_model(config):
             output_dim=output_dim, 
             modes=modes,
             fno_norm=config.get("fno_norm", "instance"),
-            fno_activation=config.get("fno_activation", "gelu")
+            fno_activation=config.get("fno_activation", "gelu"),
+            xc_range=xc_range, yc_range=yc_range, fov_range=fov_range,
+            wavelength_range=wavelength_range, focal_length_range=focal_length_range
         )
     elif name == "fno_vgg19":
         model = FNOVGG19(
@@ -58,7 +69,9 @@ def get_model(config):
             output_dim=output_dim, 
             modes=modes,
             fno_norm=config.get("fno_norm", "instance"),
-            fno_activation=config.get("fno_activation", "gelu")
+            fno_activation=config.get("fno_activation", "gelu"),
+            xc_range=xc_range, yc_range=yc_range, fov_range=fov_range,
+            wavelength_range=wavelength_range, focal_length_range=focal_length_range
         )
     elif name == "fno_unet":
         model = FNOUNet(
@@ -66,7 +79,9 @@ def get_model(config):
             output_dim=output_dim, 
             modes=modes,
             fno_norm=config.get("fno_norm", "instance"),
-            fno_activation=config.get("fno_activation", "gelu")
+            fno_activation=config.get("fno_activation", "gelu"),
+            xc_range=xc_range, yc_range=yc_range, fov_range=fov_range,
+            wavelength_range=wavelength_range, focal_length_range=focal_length_range
         )
     
     # Transformer models

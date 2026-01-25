@@ -80,24 +80,31 @@ def plot_residual_phase_map(exp_dir, output_path):
         print(f"No checkpoint found in {exp_dir}")
         return None
     
-    # Load config
+    # Try loading checkpoint first to get config
+    try:
+        checkpoint = torch.load(checkpoint_path, map_location='cpu')
+    except Exception as e:
+        print(f"Failed to load checkpoint {checkpoint_path}: {e}")
+        return None
+
+    # Load config from file or checkpoint
     config_path = os.path.join(exp_dir, "config.yaml")
     if os.path.exists(config_path):
         config = load_config(config_path)
+    elif 'config' in checkpoint:
+        print(f"Using config from checkpoint for {os.path.basename(exp_dir)}")
+        config = checkpoint['config']
     else:
-        # Fallback: infer from experiment name
-        exp_name = os.path.basename(exp_dir)
-        print(f"Warning: No config.yaml found for {exp_name}")
+        print(f"Error: No config found for {os.path.basename(exp_dir)}")
         return None
     
     # Load model
-    checkpoint = torch.load(checkpoint_path, map_location='cpu')
-    config = checkpoint.get('config', config)
     model = get_model(config)
     model.load_state_dict(checkpoint['model_state_dict'])
     model.eval()
     
-    # Setup normalizer
+    # Setup normalizer (if needed, though hybrid models specific ranges)
+    # Even for hybrid models, we can extract ranges from config
     ranges = {
         'xc': tuple(config.get("xc_range", [-500, 500])),
         'yc': tuple(config.get("yc_range", [-500, 500])),
@@ -105,7 +112,11 @@ def plot_residual_phase_map(exp_dir, output_path):
         'wavelength': tuple(config.get("wavelength_range", [0.4, 0.7])),
         'focal_length': tuple(config.get("focal_length_range", [10, 100])),
     }
-    normalizer = ParameterNormalizer(ranges)
+    
+    # For Hybrid models, we don't strictly need Normalizer for denorm if they output raw
+    # But let's keep it consistent. If config uses modernize=False, outputs are raw.
+    standardize = config.get("standardize_outputs", False)
+    normalizer = ParameterNormalizer(ranges) if standardize else None
     
     # Generate a test sample
     resolution = config.get("resolution", 1024)
@@ -131,7 +142,10 @@ def plot_residual_phase_map(exp_dir, output_path):
     # Predict
     with torch.no_grad():
         pred_norm = model(inp_tensor)
-        pred_denorm = normalizer.denormalize_tensor(pred_norm)
+        if normalizer:
+            pred_denorm = normalizer.denormalize_tensor(pred_norm)
+        else:
+            pred_denorm = pred_norm
         pred_params = pred_denorm.squeeze().numpy()
     
     # Compute residual phase

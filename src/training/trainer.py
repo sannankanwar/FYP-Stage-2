@@ -105,6 +105,10 @@ class Trainer:
         else:
             print(f"Using Standard MSELoss (Fallback for '{loss_name}')")
             self.criterion = nn.MSELoss()
+            
+        # Move criterion to device (important for losses with buffers)
+        if isinstance(self.criterion, nn.Module):
+            self.criterion = self.criterion.to(self.device)
         
         # NOTE: Removed fixed anchor grid methodology
         # Training now uses only random on-the-fly data for all epochs

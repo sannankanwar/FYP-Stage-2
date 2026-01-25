@@ -2,7 +2,7 @@ experiment_name: exp5_B01_inverse_variance
 description: 'Phase B: Statistical Optimal Weighting (Inverse Variance)'
 model: {name: fno_resnet18, output_dim: 5, modes: 32}
 training:
-  epochs: 50
+  epochs: 10
   batch_size: 16
   learning_rate: 0.001
   optimizer: adam
@@ -17,4 +17,4 @@ training:
   loss_weights: [4.0e-06, 4.0e-06, 0.01, 44.44, 4.9e-4]
   lambda_param: 1.0
   lambda_physics: 0.5
-data: {grid_strategy: random_all, window_size: 100.0}
+data: {grid_strategy: random_all, window_size: 100.0, train_samples: 3000}

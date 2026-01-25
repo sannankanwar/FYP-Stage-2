@@ -263,7 +263,13 @@ class Trainer:
         try:
             plot_scatter(all_targets, all_preds, epoch_snap_dir, title=f"Epoch {epoch+1} Validation")
         except Exception as e:
-            print(f"Failed to generate snapshot: {e}")
+            print(f"Failed to generate scatter plot: {e}")
+        
+        # Generate residual phase map for one sample
+        try:
+            self._plot_residual_phase(epoch_snap_dir, all_preds[0], all_targets[0])
+        except Exception as e:
+            print(f"Failed to generate residual plot: {e}")
 
     def _save_checkpoint(self, epoch, val_loss, name):
         path = os.path.join(self.checkpoint_dir, name)
@@ -275,3 +281,62 @@ class Trainer:
             'config': self.config
         }
         torch.save(checkpoint, path)
+
+    def _plot_residual_phase(self, save_dir, pred_params, true_params):
+        """
+        Generate residual phase map comparing predicted vs true parameters.
+        """
+        import matplotlib
+        matplotlib.use('Agg')
+        from data.loaders.simulation import generate_single_sample
+        
+        resolution = self.config.get("resolution", 256)
+        window_size = self.config.get("window_size", 100.0)
+        
+        # Generate phase maps
+        true_inp, _ = generate_single_sample(
+            N=resolution, xc=true_params[0], yc=true_params[1], fov=true_params[2],
+            wavelength=true_params[3], focal_length=true_params[4], window_size=window_size
+        )
+        pred_inp, _ = generate_single_sample(
+            N=resolution, xc=pred_params[0], yc=pred_params[1], fov=pred_params[2],
+            wavelength=pred_params[3], focal_length=pred_params[4], window_size=window_size
+        )
+        
+        # Compute phase and residual
+        true_phase = np.arctan2(true_inp[:,:,1], true_inp[:,:,0])
+        pred_phase = np.arctan2(pred_inp[:,:,1], pred_inp[:,:,0])
+        residual = np.angle(np.exp(1j * (true_phase - pred_phase)))
+        
+        # Plot
+        fig, axes = plt.subplots(1, 4, figsize=(16, 4))
+        
+        im0 = axes[0].imshow(true_phase, cmap='twilight', vmin=-np.pi, vmax=np.pi)
+        axes[0].set_title('True Phase')
+        axes[0].axis('off')
+        plt.colorbar(im0, ax=axes[0], fraction=0.046)
+        
+        im1 = axes[1].imshow(pred_phase, cmap='twilight', vmin=-np.pi, vmax=np.pi)
+        axes[1].set_title('Predicted Phase')
+        axes[1].axis('off')
+        plt.colorbar(im1, ax=axes[1], fraction=0.046)
+        
+        im2 = axes[2].imshow(residual, cmap='RdBu', vmin=-np.pi, vmax=np.pi)
+        axes[2].set_title('Residual (True - Pred)')
+        axes[2].axis('off')
+        plt.colorbar(im2, ax=axes[2], fraction=0.046)
+        
+        # Parameter comparison bar chart
+        param_names = ['xc', 'yc', 'fov', 'λ', 'f']
+        x = np.arange(5)
+        width = 0.35
+        axes[3].bar(x - width/2, true_params, width, label='True', alpha=0.7)
+        axes[3].bar(x + width/2, pred_params, width, label='Pred', alpha=0.7)
+        axes[3].set_xticks(x)
+        axes[3].set_xticklabels(param_names)
+        axes[3].legend()
+        axes[3].set_title('Parameter Comparison')
+        
+        plt.tight_layout()
+        plt.savefig(os.path.join(save_dir, 'residual_phase.png'), dpi=150)
+        plt.close()

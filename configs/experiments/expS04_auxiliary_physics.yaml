@@ -1,0 +1,33 @@
+# Experiment S04: Auxiliary Physics Loss
+# Tests: AuxiliaryPhysicsLoss with fringe density auxiliary task
+experiment_name: "expS04_auxiliary_physics"
+description: "Spectral ResNet with AuxiliaryPhysicsLoss. Uses FFT fringe density to disambiguate λ/f."
+
+# Training
+epochs: 100
+batch_size: 32
+learning_rate: 0.001
+optimizer: "adam"
+scheduler: "plateau"
+lambda_param: 1.0
+lambda_physics: 0.5
+lambda_fringe: 0.1
+
+# Model
+model:
+  name: "spectral_resnet"
+  input_channels: 2
+  output_dim: 5
+  modes: 32
+  activation: "relu"
+
+# Data & Loss
+standardize_outputs: true
+loss_function: "auxiliary_physics"
+loss_weights: [1.0, 1.0, 5.0, 20.0, 20.0]  # Higher weight on S, wavelength, focal_length
+grid_strategy: "random_all"
+
+# Parameter ranges (updated)
+S_range: [1.0, 40.0]
+wavelength_range: [0.4, 0.7]
+focal_length_range: [10.0, 100.0]

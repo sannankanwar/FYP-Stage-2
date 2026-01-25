@@ -54,7 +54,7 @@ class Trainer:
             ranges = {
                 'xc': ds.xc_range,
                 'yc': ds.yc_range,
-                'fov': ds.fov_range,
+                'S': ds.S_range,
                 'wavelength': ds.wavelength_range,
                 'focal_length': ds.focal_length_range
             }
@@ -78,19 +78,16 @@ class Trainer:
                 lambda_param=l_param,
                 lambda_physics=l_physics,
                 param_weights=weights,
-                window_size=config.get("window_size", 100.0),
                 normalizer=self.normalizer
             )
         elif loss_name == "auxiliary_physics":
-            print("Using AuxiliaryPhysicsLoss (with gradient + fringe losses)")
+            print("Using AuxiliaryPhysicsLoss (with fringe density loss)")
             weights = config.get("loss_weights", [1.0, 1.0, 5.0, 20.0, 20.0])
             self.criterion = AuxiliaryPhysicsLoss(
                 lambda_param=float(config.get("lambda_param", 1.0)),
                 lambda_physics=float(config.get("lambda_physics", 0.5)),
-                lambda_gradient=float(config.get("lambda_gradient", 0.1)),
                 lambda_fringe=float(config.get("lambda_fringe", 0.1)),
                 param_weights=weights,
-                window_size=config.get("window_size", 100.0),
                 normalizer=self.normalizer
             )
         elif loss_name == "raw_physics":
@@ -102,15 +99,13 @@ class Trainer:
             self.criterion = RawPhysicsLoss(
                 lambda_param=l_param,
                 lambda_physics=l_physics,
-                window_size=config.get("window_size", 100.0),
                 param_weights=weights
             )
         elif loss_name == "adaptive_physics":
             print("Using AdaptivePhysicsLoss (Kendall Uncertainty)")
             self.criterion = AdaptivePhysicsLoss(
                 lambda_param=float(config.get("lambda_param", 1.0)),
-                lambda_physics=float(config.get("lambda_physics", 0.5)),
-                window_size=config.get("window_size", 100.0)
+                lambda_physics=float(config.get("lambda_physics", 0.5))
             )
         else:
             print(f"Using Standard MSELoss (Fallback for '{loss_name}')")
@@ -318,41 +313,33 @@ class Trainer:
         from data.loaders.simulation import generate_single_sample
         
         resolution = self.config.get("resolution", 256)
-        window_size = self.config.get("window_size", 100.0)
         
-        # Define 5 Test Cases (As requested by user)
-        # 1) xc yc = 100, fov = 20, wavelength = 600, focal length = 10
-        # 2) xc yc = 200, fov = 20, wavelength = 600, focal length = 10
-        # 3) xc yc = 300, fov = 20, wavelength = 600, focal length = 10
-        # 4) xc yc = 300, fov = 10, wavelength = 500, focal length = 5 (using 10)
-        # 5) xc yc = 300, fov = 10, wavelength = 400, focal length = 5 (using 10)
-        
+        # Define 5 Test Cases with S (window size) parameter
+        # Format: [xc, yc, S, wavelength, focal_length]
         test_cases = [
-            {'name': 'Case1_Base',     'p': [100.0, 100.0, 20.0, 0.6, 10.0]},
-            {'name': 'Case2_Shift',    'p': [200.0, 200.0, 20.0, 0.6, 10.0]},
-            {'name': 'Case3_Far',      'p': [300.0, 300.0, 20.0, 0.6, 10.0]},
-            {'name': 'Case4_MixedA',   'p': [300.0, 300.0, 10.0, 0.5, 10.0]},
-            {'name': 'Case5_MixedB',   'p': [300.0, 300.0, 10.0, 0.4, 10.0]},
+            {'name': 'Case1_Base',     'p': [100.0, 100.0, 20.0, 0.6, 50.0]},
+            {'name': 'Case2_Shift',    'p': [200.0, 200.0, 20.0, 0.6, 50.0]},
+            {'name': 'Case3_Far',      'p': [300.0, 300.0, 30.0, 0.6, 70.0]},
+            {'name': 'Case4_SmallS',   'p': [300.0, 300.0, 10.0, 0.5, 40.0]},
+            {'name': 'Case5_LargeS',   'p': [300.0, 300.0, 40.0, 0.4, 80.0]},
         ]
         
         for case in test_cases:
             true_params = np.array(case['p'])
             
-            # Generate input
+            # Generate input using S as window size
             inp, _ = generate_single_sample(
                 N=resolution, 
-                xc=true_params[0], yc=true_params[1], fov=true_params[2],
-                wavelength=true_params[3], focal_length=true_params[4], 
-                window_size=window_size
+                xc=true_params[0], yc=true_params[1], S=true_params[2],
+                wavelength=true_params[3], focal_length=true_params[4]
             )
             
             # Predict
-            inp_tensor = torch.from_numpy(inp.transpose(2,0,1)).unsqueeze(0).to(self.device) # (1, 2, H, W)
+            inp_tensor = torch.from_numpy(inp.transpose(2,0,1)).unsqueeze(0).to(self.device)
             
             with torch.no_grad():
                 pred_raw = self.model(inp_tensor)
                 
-                # Check normalizer (Though we disabled it, keeping logic safe)
                 if self.normalizer and self.config.get("standardize_outputs", False):
                     pred_denorm = self.normalizer.denormalize_tensor(pred_raw)
                     pred_params = pred_denorm.cpu().numpy()[0]
@@ -360,18 +347,15 @@ class Trainer:
                     pred_params = pred_raw.cpu().numpy()[0]
             
             # Generate True/Pred Phase Maps for comparison
-            # Re-generate true (redundant but clean)
             true_inp, _ = generate_single_sample(
                 N=resolution, 
-                xc=true_params[0], yc=true_params[1], fov=true_params[2],
-                wavelength=true_params[3], focal_length=true_params[4], 
-                window_size=window_size
+                xc=true_params[0], yc=true_params[1], S=true_params[2],
+                wavelength=true_params[3], focal_length=true_params[4]
             )
             pred_inp, _ = generate_single_sample(
                 N=resolution, 
-                xc=pred_params[0], yc=pred_params[1], fov=pred_params[2],
-                wavelength=pred_params[3], focal_length=pred_params[4], 
-                window_size=window_size
+                xc=pred_params[0], yc=pred_params[1], S=pred_params[2],
+                wavelength=pred_params[3], focal_length=pred_params[4]
             )
             
             true_phase = np.arctan2(true_inp[:,:,1], true_inp[:,:,0])
@@ -397,7 +381,7 @@ class Trainer:
             plt.colorbar(im2, ax=axes[2], fraction=0.046)
             
             # Param comparison
-            param_names = ['xc', 'yc', 'fov', 'λ', 'f']
+            param_names = ['xc', 'yc', 'S', 'λ', 'f']
             x = np.arange(5)
             width = 0.35
             axes[3].bar(x - width/2, true_params, width, label='True', alpha=0.7)
@@ -410,3 +394,4 @@ class Trainer:
             plt.tight_layout()
             plt.savefig(os.path.join(save_dir, f'residual_{case["name"]}.png'), dpi=100)
             plt.close()
+

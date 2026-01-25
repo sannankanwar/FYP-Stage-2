@@ -1,0 +1,31 @@
+# Experiment S02: Adaptive Physics Loss (Kendall's Uncertainty)
+# Tests: AdaptivePhysicsLoss with learned uncertainty weights
+experiment_name: "expS02_adaptive_physics"
+description: "Spectral ResNet with AdaptivePhysicsLoss (Kendall uncertainty). S controls window size."
+
+# Training
+epochs: 100
+batch_size: 32
+learning_rate: 0.001
+optimizer: "adam"
+scheduler: "plateau"
+lambda_param: 1.0
+lambda_physics: 0.5
+
+# Model
+model:
+  name: "spectral_resnet"
+  input_channels: 2
+  output_dim: 5
+  modes: 32
+  activation: "relu"
+
+# Data & Loss
+standardize_outputs: false  # AdaptivePhysicsLoss learns its own scaling
+loss_function: "adaptive_physics"
+grid_strategy: "random_all"
+
+# Parameter ranges (updated)
+S_range: [1.0, 40.0]
+wavelength_range: [0.4, 0.7]
+focal_length_range: [10.0, 100.0]

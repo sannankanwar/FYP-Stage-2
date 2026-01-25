@@ -19,6 +19,7 @@ def main():
     parser.add_argument("--config", type=str, default="configs/training.yaml", help="Path to training config")
     parser.add_argument("--model-config", type=str, default="configs/model.yaml", help="Path to model config")
     parser.add_argument("--data-config", type=str, default="configs/data.yaml", help="Path to data config")
+    parser.add_argument("--output-dir", type=str, help="Root directory for outputs (overrides config)")
     args = parser.parse_args()
 
     print("Loading configurations...")
@@ -38,6 +39,9 @@ def main():
         full_config.update(train_config['data'])
     if 'training' in train_config and isinstance(train_config['training'], dict):
         full_config.update(train_config['training'])
+        
+    if args.output_dir:
+        full_config['output_dir'] = args.output_dir
         
     # Final check on critical parameters
     model_name = full_config.get('name', 'spectral_resnet')

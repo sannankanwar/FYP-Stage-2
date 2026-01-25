@@ -28,6 +28,7 @@ for i in "${!CONFIGS[@]}"; do
     
     uv run python "$PROJECT_DIR/scripts/train.py" \
         --config "$CONFIG" \
+        --output-dir "$OUTPUT_DIR" \
         2>&1 | tee -a "$LOG_FILE"
     
     echo "Completed: $EXP_NAME at $(date)" | tee -a "$LOG_FILE"

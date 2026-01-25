@@ -161,3 +161,194 @@ class WeightedPhysicsLoss(nn.Module):
             "loss_physics": loss_physics.item(),
             "total_loss": total_loss.item()
         }
+
+
+class AuxiliaryPhysicsLoss(nn.Module):
+    """
+    Enhanced physics loss with auxiliary tasks to disambiguate degenerate parameters.
+    
+    Auxiliary Tasks:
+    1. Gradient Direction Loss: fov creates horizontal tilt - enforce gradient angle match
+    2. Fringe Density Loss: λ/f ratio determines fringe spacing - match FFT peak frequency
+    """
+    def __init__(self, 
+                 lambda_param=1.0, 
+                 lambda_physics=0.5,
+                 lambda_gradient=0.1,
+                 lambda_fringe=0.1,
+                 param_weights=[1.0, 1.0, 5.0, 20.0, 20.0],
+                 window_size=100.0,
+                 normalizer=None):
+        super().__init__()
+        self.lambda_param = lambda_param
+        self.lambda_physics = lambda_physics
+        self.lambda_gradient = lambda_gradient
+        self.lambda_fringe = lambda_fringe
+        self.param_loss = WeightedStandardizedLoss(weights=param_weights, normalizer=normalizer)
+        self.normalizer = normalizer
+        self.window_size = window_size
+        self.mse = nn.MSELoss()
+        
+        # Sobel kernels for gradient computation
+        self.register_buffer('sobel_x', torch.tensor([
+            [-1, 0, 1],
+            [-2, 0, 2],
+            [-1, 0, 1]
+        ], dtype=torch.float32).view(1, 1, 3, 3) / 4.0)
+        self.register_buffer('sobel_y', torch.tensor([
+            [-1, -2, -1],
+            [0, 0, 0],
+            [1, 2, 1]
+        ], dtype=torch.float32).view(1, 1, 3, 3) / 4.0)
+
+    def _compute_gradient_loss(self, input_images, pred_fov_rad):
+        """
+        Compute gradient direction loss.
+        fov creates a horizontal gradient in the phase - gradient angle should correlate with sin(fov).
+        """
+        B, C, H, W = input_images.shape
+        
+        # Use the cos channel (channel 0) for gradient computation
+        phase_channel = input_images[:, 0:1, :, :]  # (B, 1, H, W)
+        
+        # Compute gradients using Sobel
+        grad_x = torch.nn.functional.conv2d(phase_channel, self.sobel_x, padding=1)
+        grad_y = torch.nn.functional.conv2d(phase_channel, self.sobel_y, padding=1)
+        
+        # Average gradient direction across the image (central region to avoid edges)
+        h_start, h_end = H // 4, 3 * H // 4
+        w_start, w_end = W // 4, 3 * W // 4
+        
+        mean_grad_x = grad_x[:, :, h_start:h_end, w_start:w_end].mean(dim=(1, 2, 3))  # (B,)
+        mean_grad_y = grad_y[:, :, h_start:h_end, w_start:w_end].mean(dim=(1, 2, 3))  # (B,)
+        
+        # fov contribution to horizontal gradient: ∂φ/∂x ∝ k0 * sin(θ)
+        # Since fov adds k0 * x * sin(θ), gradient in x is k0 * sin(θ)
+        # Normalize to get direction indicator
+        predicted_tilt = torch.sin(pred_fov_rad)  # (B,)
+        
+        # The gradient should be proportional to sin(fov)
+        # Normalize both to correlate
+        eps = 1e-6
+        grad_norm = torch.sqrt(mean_grad_x**2 + mean_grad_y**2 + eps)
+        normalized_grad_x = mean_grad_x / grad_norm
+        
+        # Loss: gradient direction should match fov direction
+        loss = self.mse(normalized_grad_x, predicted_tilt / (torch.abs(predicted_tilt) + eps))
+        
+        return loss
+
+    def _compute_fringe_density_loss(self, input_images, pred_wavelength, pred_focal_length):
+        """
+        Compute fringe density loss using FFT.
+        Fringe period ∝ λ * f / r, so higher λ*f means lower frequency.
+        """
+        B, C, H, W = input_images.shape
+        
+        # Use cos channel
+        phase_channel = input_images[:, 0, :, :]  # (B, H, W)
+        
+        # Compute 2D FFT magnitude
+        fft = torch.fft.fft2(phase_channel)
+        fft_mag = torch.abs(fft)
+        
+        # Shift zero frequency to center
+        fft_shifted = torch.fft.fftshift(fft_mag, dim=(-2, -1))
+        
+        # Find radial average to get dominant frequency
+        center_h, center_w = H // 2, W // 2
+        
+        # Create radial coordinate grid
+        y_coords = torch.arange(H, device=input_images.device).float() - center_h
+        x_coords = torch.arange(W, device=input_images.device).float() - center_w
+        Y, X = torch.meshgrid(y_coords, x_coords, indexing='ij')
+        R = torch.sqrt(X**2 + Y**2)
+        
+        # Weighted centroid of frequency (excluding DC)
+        mask = (R > 2) & (R < min(H, W) // 4)  # Exclude DC and high freq noise
+        
+        weighted_sum = (fft_shifted * R.unsqueeze(0) * mask.unsqueeze(0)).sum(dim=(-2, -1))
+        total_weight = (fft_shifted * mask.unsqueeze(0)).sum(dim=(-2, -1)) + 1e-6
+        
+        dominant_freq = weighted_sum / total_weight  # (B,)
+        
+        # Theoretical: freq ∝ 1 / (λ * f)  
+        # Normalize both to get relative comparison
+        lambda_f_product = pred_wavelength * pred_focal_length
+        theoretical_freq_scale = 1.0 / (lambda_f_product + 1e-6)
+        
+        # Normalize for comparison
+        dominant_freq_norm = dominant_freq / (dominant_freq.mean() + 1e-6)
+        theoretical_freq_norm = theoretical_freq_scale / (theoretical_freq_scale.mean() + 1e-6)
+        
+        loss = self.mse(dominant_freq_norm, theoretical_freq_norm)
+        
+        return loss
+
+    def forward(self, pred_params, true_params, input_images):
+        """
+        Compute total loss with auxiliary components.
+        """
+        # 1. Parameter Loss
+        loss_param, _ = self.param_loss(pred_params, true_params)
+        
+        # 2. Physics Reconstruction Loss
+        if self.normalizer:
+            pred_params_phys = self.normalizer.denormalize_tensor(pred_params)
+        else:
+            pred_params_phys = pred_params
+            
+        B, C, H, W = input_images.shape
+        device = input_images.device
+        
+        xc = pred_params_phys[:, 0]
+        yc = pred_params_phys[:, 1]
+        fov = pred_params_phys[:, 2]
+        wavelength = pred_params_phys[:, 3]
+        focal_length = pred_params_phys[:, 4]
+        
+        # Create coordinate grids
+        grid_y, grid_x = torch.meshgrid(
+            torch.linspace(-0.5, 0.5, H, device=device),
+            torch.linspace(-0.5, 0.5, W, device=device),
+            indexing='ij'
+        )
+        grid_x = grid_x.unsqueeze(0).expand(B, -1, -1)
+        grid_y = grid_y.unsqueeze(0).expand(B, -1, -1)
+        
+        X_phys = xc.view(B, 1, 1) + self.window_size * grid_x
+        Y_phys = yc.view(B, 1, 1) + self.window_size * grid_y
+        
+        phi_unwrapped = compute_hyperbolic_phase(
+            X_phys, Y_phys, 
+            focal_length.view(B, 1, 1), 
+            wavelength.view(B, 1, 1), 
+            theta=fov.view(B, 1, 1)  # Broadcast fov for grid compatibility
+        )
+        phi_wrapped = wrap_phase(phi_unwrapped)
+        reconstructed = get_2channel_representation(phi_wrapped).permute(0, 3, 1, 2)
+        
+        loss_physics = self.mse(reconstructed, input_images)
+        
+        # 3. Auxiliary: Gradient Direction Loss (for fov)
+        fov_rad = fov * torch.pi / 180.0
+        loss_gradient = self._compute_gradient_loss(input_images, fov_rad)
+        
+        # 4. Auxiliary: Fringe Density Loss (for λ/f)
+        loss_fringe = self._compute_fringe_density_loss(input_images, wavelength, focal_length)
+        
+        # Total
+        total_loss = (
+            self.lambda_param * loss_param +
+            self.lambda_physics * loss_physics +
+            self.lambda_gradient * loss_gradient +
+            self.lambda_fringe * loss_fringe
+        )
+        
+        return total_loss, {
+            "loss_param": loss_param.item(),
+            "loss_physics": loss_physics.item(),
+            "loss_gradient": loss_gradient.item(),
+            "loss_fringe": loss_fringe.item(),
+            "total_loss": total_loss.item()
+        }

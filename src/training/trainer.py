@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
 from torch.utils.data import DataLoader
-from src.training.loss import Naive5ParamMSELoss, WeightedStandardizedLoss, WeightedPhysicsLoss
+from src.training.loss import Naive5ParamMSELoss, WeightedStandardizedLoss, WeightedPhysicsLoss, AuxiliaryPhysicsLoss
 from src.utils.normalization import ParameterNormalizer
 from scripts.evaluate import plot_scatter
 
@@ -72,12 +72,23 @@ class Trainer:
         elif loss_name == "weighted_physics":
             print("Using WeightedPhysicsLoss")
             weights = config.get("loss_weights", [1.0, 1.0, 1.0, 10.0, 10.0])
-            # These lambdas should be in config
             l_param = float(config.get("lambda_param", 1.0))
             l_physics = float(config.get("lambda_physics", 0.1))
             self.criterion = WeightedPhysicsLoss(
                 lambda_param=l_param,
                 lambda_physics=l_physics,
+                param_weights=weights,
+                window_size=config.get("window_size", 100.0),
+                normalizer=self.normalizer
+            )
+        elif loss_name == "auxiliary_physics":
+            print("Using AuxiliaryPhysicsLoss (with gradient + fringe losses)")
+            weights = config.get("loss_weights", [1.0, 1.0, 5.0, 20.0, 20.0])
+            self.criterion = AuxiliaryPhysicsLoss(
+                lambda_param=float(config.get("lambda_param", 1.0)),
+                lambda_physics=float(config.get("lambda_physics", 0.5)),
+                lambda_gradient=float(config.get("lambda_gradient", 0.1)),
+                lambda_fringe=float(config.get("lambda_fringe", 0.1)),
                 param_weights=weights,
                 window_size=config.get("window_size", 100.0),
                 normalizer=self.normalizer

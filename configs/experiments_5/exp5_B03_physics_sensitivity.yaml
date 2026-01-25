@@ -2,7 +2,7 @@ experiment_name: exp5_B03_physics_sensitivity
 description: 'Phase B: Physics-Aware Sensitivity Weighting (1/Jacobian)'
 model: {name: fno_resnet18, output_dim: 5, modes: 32}
 training:
-  epochs: 10
+  epochs: 100
   batch_size: 16
   learning_rate: 0.001
   optimizer: adam

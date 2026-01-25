@@ -2,7 +2,7 @@ experiment_name: exp5_B02_entropy
 description: 'Phase B: Differential Entropy Weighting (1/Range)'
 model: {name: fno_resnet18, output_dim: 5, modes: 32}
 training:
-  epochs: 10
+  epochs: 100
   batch_size: 16
   learning_rate: 0.001
   optimizer: adam

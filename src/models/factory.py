@@ -50,6 +50,7 @@ def get_model(config):
             modes=modes,
             fno_norm=config.get("fno_norm", "instance"),
             fno_activation=config.get("fno_activation", "gelu"),
+            input_resolution=config.get("resolution", 256),
             xc_range=xc_range, yc_range=yc_range, fov_range=fov_range,
             wavelength_range=wavelength_range, focal_length_range=focal_length_range
         )

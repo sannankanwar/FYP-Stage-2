@@ -197,8 +197,9 @@ class WeightedStandardizedLoss(nn.Module):
             self.weights = self.weights.to(pred_params.device)
             
         if self.normalizer:
+            pred_params_norm = self.normalizer.normalize_tensor(pred_params)
             true_params_norm = self.normalizer.normalize_tensor(true_params)
-            diff = (pred_params - true_params_norm)
+            diff = (pred_params_norm - true_params_norm)
         else:
             # If standardizing is off but we want weights, usually means we weight raw values?
             # But raw values have vastly different scales. 
@@ -245,10 +246,8 @@ class WeightedPhysicsLoss(nn.Module):
         loss_param, _ = self.param_loss(pred_params, true_params)
 
         # 2. Physics Component (Differentiable Reconstruction)
-        if self.normalizer:
-            pred_params_phys = self.normalizer.denormalize_tensor(pred_params)
-        else:
-            pred_params_phys = pred_params
+        # Inputs are already physical from HybridScaledOutput
+        pred_params_phys = pred_params
 
         B, C, H, W = input_images.shape
         device = input_images.device
@@ -317,10 +316,13 @@ class AuxiliaryPhysicsLoss(nn.Module):
         self.normalizer = normalizer
         self.mse = nn.MSELoss()
 
-    def _compute_fringe_density_loss(self, input_images, pred_wavelength, pred_focal_length):
+    def _compute_fringe_density_loss(self, input_images, pred_wavelength, pred_focal_length, pred_S):
         """
         Compute fringe density loss using FFT.
         Fringe period ∝ λ * f / r, so higher λ*f means lower frequency.
+        With scaling S (window size), physical coordinate r_phys = S * r_norm.
+        Phase φ ~ (π * S² * r_norm²) / (λ * f).
+        Frequency (derivative) ∝ S² / (λ * f).
         """
         B, C, H, W = input_images.shape
         
@@ -339,13 +341,16 @@ class AuxiliaryPhysicsLoss(nn.Module):
         
         mask = (R > 2) & (R < min(H, W) // 4)
         
+        # Calculate mean radial frequency
         weighted_sum = (fft_shifted * R.unsqueeze(0) * mask.unsqueeze(0)).sum(dim=(-2, -1))
         total_weight = (fft_shifted * mask.unsqueeze(0)).sum(dim=(-2, -1)) + 1e-6
         
         dominant_freq = weighted_sum / total_weight
         
+        # Theoretical scaling: S^2 / (λ * f)
         lambda_f_product = pred_wavelength * pred_focal_length
-        theoretical_freq_scale = 1.0 / (lambda_f_product + 1e-6)
+        s_squared = pred_S ** 2
+        theoretical_freq_scale = s_squared / (lambda_f_product + 1e-6)
         
         dominant_freq_norm = dominant_freq / (dominant_freq.mean() + 1e-6)
         theoretical_freq_norm = theoretical_freq_scale / (theoretical_freq_scale.mean() + 1e-6)
@@ -362,10 +367,9 @@ class AuxiliaryPhysicsLoss(nn.Module):
         loss_param, _ = self.param_loss(pred_params, true_params)
         
         # 2. Physics Reconstruction Loss
-        if self.normalizer:
-            pred_params_phys = self.normalizer.denormalize_tensor(pred_params)
-        else:
-            pred_params_phys = pred_params
+        # 2. Physics Reconstruction Loss
+        # Inputs are already physical from HybridScaledOutput
+        pred_params_phys = pred_params
             
         B, C, H, W = input_images.shape
         device = input_images.device
@@ -400,7 +404,7 @@ class AuxiliaryPhysicsLoss(nn.Module):
         loss_physics = self.mse(reconstructed, input_images)
         
         # 3. Auxiliary: Fringe Density Loss (for λ/f)
-        loss_fringe = self._compute_fringe_density_loss(input_images, wavelength, focal_length)
+        loss_fringe = self._compute_fringe_density_loss(input_images, wavelength, focal_length, S)
         
         # Total
         total_loss = (

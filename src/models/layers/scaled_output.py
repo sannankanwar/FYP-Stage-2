@@ -17,14 +17,14 @@ class HybridScaledOutput(nn.Module):
     Parameters and their ranges:
         - xc: [-500, 500] μm (symmetric → tanh)
         - yc: [-500, 500] μm (symmetric → tanh)
-        - fov: [1, 20] degrees (asymmetric → sigmoid)
+        - S: [1, 40] μm (asymmetric → sigmoid)
         - wavelength: [0.4, 0.7] μm (asymmetric → sigmoid)
         - focal_length: [10, 100] μm (asymmetric → sigmoid)
     """
     def __init__(self, 
                  xc_range=(-500, 500),
                  yc_range=(-500, 500),
-                 fov_range=(1, 20),
+                 S_range=(1, 40),
                  wavelength_range=(0.4, 0.7),
                  focal_length_range=(10, 100)):
         super().__init__()
@@ -37,8 +37,8 @@ class HybridScaledOutput(nn.Module):
         self.yc_half = (yc_range[1] - yc_range[0]) / 2
         
         # Store ranges for sigmoid (min + scale)
-        self.fov_min = fov_range[0]
-        self.fov_scale = fov_range[1] - fov_range[0]
+        self.S_min = S_range[0]
+        self.S_scale = S_range[1] - S_range[0]
         
         self.wl_min = wavelength_range[0]
         self.wl_scale = wavelength_range[1] - wavelength_range[0]
@@ -58,11 +58,11 @@ class HybridScaledOutput(nn.Module):
         yc = self.yc_center + self.yc_half * torch.tanh(x[:, 1])
         
         # Asymmetric params: sigmoid
-        fov = self.fov_min + self.fov_scale * torch.sigmoid(x[:, 2])
+        S = self.S_min + self.S_scale * torch.sigmoid(x[:, 2])
         wl = self.wl_min + self.wl_scale * torch.sigmoid(x[:, 3])
         fl = self.fl_min + self.fl_scale * torch.sigmoid(x[:, 4])
         
-        return torch.stack([xc, yc, fov, wl, fl], dim=1)
+        return torch.stack([xc, yc, S, wl, fl], dim=1)
 
 
 class ScaledTanhOutput(nn.Module):

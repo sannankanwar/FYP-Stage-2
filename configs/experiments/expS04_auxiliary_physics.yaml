@@ -5,7 +5,7 @@ description: "Spectral ResNet with AuxiliaryPhysicsLoss. Uses FFT fringe density
 
 # Training
 epochs: 100
-batch_size: 32
+batch_size: 8
 learning_rate: 0.001
 optimizer: "adam"
 scheduler: "plateau"
@@ -15,7 +15,8 @@ lambda_fringe: 0.1
 
 # Model
 model:
-  name: "spectral_resnet"
+  name: "fno_resnet18"
+  resolution: 1024
   input_channels: 2
   output_dim: 5
   modes: 32

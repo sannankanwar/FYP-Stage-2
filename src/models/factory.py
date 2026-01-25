@@ -38,7 +38,7 @@ def get_model(config):
     # Extract parameter ranges for scaled output
     xc_range = tuple(config.get("xc_range", [-500, 500]))
     yc_range = tuple(config.get("yc_range", [-500, 500]))
-    fov_range = tuple(config.get("fov_range", [1, 20]))
+    S_range = tuple(config.get("S_range", [1, 40]))
     wavelength_range = tuple(config.get("wavelength_range", [0.4, 0.7]))
     focal_length_range = tuple(config.get("focal_length_range", [10, 100]))
     
@@ -50,8 +50,8 @@ def get_model(config):
             modes=modes,
             fno_norm=config.get("fno_norm", "instance"),
             fno_activation=config.get("fno_activation", "gelu"),
-            input_resolution=config.get("resolution", 256),
-            xc_range=xc_range, yc_range=yc_range, fov_range=fov_range,
+            input_resolution=config.get("resolution", 1024),
+            xc_range=xc_range, yc_range=yc_range, S_range=S_range,
             wavelength_range=wavelength_range, focal_length_range=focal_length_range
         )
     elif name == "fno_resnet50":
@@ -61,7 +61,7 @@ def get_model(config):
             modes=modes,
             fno_norm=config.get("fno_norm", "instance"),
             fno_activation=config.get("fno_activation", "gelu"),
-            xc_range=xc_range, yc_range=yc_range, fov_range=fov_range,
+            xc_range=xc_range, yc_range=yc_range, S_range=S_range,
             wavelength_range=wavelength_range, focal_length_range=focal_length_range
         )
     elif name == "fno_vgg19":
@@ -71,7 +71,7 @@ def get_model(config):
             modes=modes,
             fno_norm=config.get("fno_norm", "instance"),
             fno_activation=config.get("fno_activation", "gelu"),
-            xc_range=xc_range, yc_range=yc_range, fov_range=fov_range,
+            xc_range=xc_range, yc_range=yc_range, S_range=S_range,
             wavelength_range=wavelength_range, focal_length_range=focal_length_range
         )
     elif name == "fno_unet":
@@ -81,7 +81,7 @@ def get_model(config):
             modes=modes,
             fno_norm=config.get("fno_norm", "instance"),
             fno_activation=config.get("fno_activation", "gelu"),
-            xc_range=xc_range, yc_range=yc_range, fov_range=fov_range,
+            xc_range=xc_range, yc_range=yc_range, S_range=S_range,
             wavelength_range=wavelength_range, focal_length_range=focal_length_range
         )
     

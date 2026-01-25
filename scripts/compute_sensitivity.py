@@ -60,8 +60,10 @@ def compute_sensitivity(N=256, samples=100, device='cpu'):
     phi = compute_hyperbolic_phase(X_phys, Y_phys, fl, wl)
     
     # 5. Compute Gradients
-    grad_output = torch.ones_like(phi)
-    phi.backward(gradient=grad_output)
+    # Use Hutchinson's estimator (random vector) to avoid spatial cancellation
+    # J^T v where v ~ N(0, 1). E[|grad|^2] ~ Sum(J_ij^2)
+    v = torch.randn_like(phi)
+    phi.backward(gradient=v)
     
     # 6. Aggregate Sensitivities
     # Sensitivity = Mean( |dPhi/dParam| ) per pixel

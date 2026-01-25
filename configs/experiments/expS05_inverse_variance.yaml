@@ -1,0 +1,39 @@
+# Experiment S05: Inverse Variance Weighting
+# Weights = 1 / Range^2 (proxy for inverse variance)
+experiment_name: "expS05_inverse_variance"
+description: "RawPhysicsLoss with Inverse Variance weights (1/Range^2). S range [1, 40]."
+
+# Training
+epochs: 100
+batch_size: 8
+learning_rate: 0.001
+optimizer: "adam"
+scheduler: "plateau"
+lambda_param: 1.0
+lambda_physics: 0.5
+
+# Model
+model:
+  name: "fno_resnet18"
+  resolution: 1024
+  input_channels: 2
+  output_dim: 5
+  modes: 32
+
+# Data & Loss
+standardize_outputs: false
+loss_function: "raw_physics"
+grid_strategy: "random_all"
+
+# Weights (1/Range^2)
+# xc: 1000 -> 1e-6
+# yc: 1000 -> 1e-6
+# S: 39 -> 6.57e-4
+# wl: 0.3 -> 11.11
+# fl: 90 -> 1.23e-4
+loss_weights: [1.0e-6, 1.0e-6, 6.57e-4, 11.11, 1.23e-4]
+
+# Parameter ranges
+S_range: [1.0, 40.0]
+wavelength_range: [0.4, 0.7]
+focal_length_range: [10.0, 100.0]

@@ -17,7 +17,7 @@ class FNOResNet18(nn.Module):
     """
     def __init__(self, in_channels=2, output_dim=5, modes=32, fno_norm='instance', fno_activation='gelu',
                  input_resolution=256,
-                 xc_range=(-500, 500), yc_range=(-500, 500), fov_range=(1, 20),
+                 xc_range=(-500, 500), yc_range=(-500, 500), S_range=(1, 40),
                  wavelength_range=(0.4, 0.7), focal_length_range=(10, 100)):
         super().__init__()
         
@@ -40,31 +40,42 @@ class FNOResNet18(nn.Module):
             # Note: We avoid ReLU on the final output to allow negative values (like sin/cos inputs) to pass to ResNet stem.
             
             if factor == 4:
+                # Custom Pyramid Downsampler (1024 -> 256)
+                # 2 -> 8 -> 16 channels to preserve phase information
                 self.downsampler = nn.Sequential(
+                    # 1024 -> 512: 2 -> 8 channels
                     nn.Conv2d(in_channels, 8, kernel_size=5, stride=2, padding=2, bias=False),
                     nn.BatchNorm2d(8),
                     nn.ReLU(inplace=True),
-                    nn.Conv2d(8, in_channels, kernel_size=3, stride=2, padding=1, bias=False),
-                    nn.BatchNorm2d(in_channels)
+                    
+                    # 512 -> 256: 8 -> 16 channels
+                    nn.Conv2d(8, 16, kernel_size=3, stride=2, padding=1, bias=False),
+                    nn.BatchNorm2d(16),
+                    nn.ReLU(inplace=True),
                 )
             else:
-                # Fallback for other factors (e.g. 2x) or just use generic AvgPool if factor is odd
-                # But for now assuming factor=4 based on 1024->256 usage.
-                # If explicit factor != 4, we use a single strided conv if possible or fallback to AvgPool
+                # Fallback
                 if factor == 2:
                      self.downsampler = nn.Sequential(
-                        nn.Conv2d(in_channels, in_channels, kernel_size=3, stride=2, padding=1, bias=False),
-                        nn.BatchNorm2d(in_channels)
+                        nn.Conv2d(in_channels, 16, kernel_size=3, stride=2, padding=1, bias=False),
+                        nn.BatchNorm2d(16),
+                        nn.ReLU(inplace=True)
                     )
                 else:
-                    print(f"Warning: automatic conv downsampler only tuned for 2x/4x. Using AvgPool for factor {factor}.")
                     self.downsampler = nn.AvgPool2d(kernel_size=factor, stride=factor)
             
         # Load ResNet18 backbone
         base = resnet18(weights=None)
         
-        # Modified stem for 2-channel input
-        self.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        # Modified stem for 16-channel input (from downsampler)
+        # If no downsampler (256x256 input), we project 2->16 first or just handle 2 channels?
+        # If resolution=256, downsampler is None, input is 2 channels.
+        # If resolution=1024, downsampler output is 16 channels.
+        # We need to handle both.
+        
+        stem_in_channels = 16 if self.downsampler is not None else in_channels
+        
+        self.conv1 = nn.Conv2d(stem_in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
         self.bn1 = base.bn1
         self.relu = base.relu
         self.maxpool = base.maxpool
@@ -91,7 +102,7 @@ class FNOResNet18(nn.Module):
         
         # Scaled output layer (outputs raw physical values)
         self.scaled_output = HybridScaledOutput(
-            xc_range=xc_range, yc_range=yc_range, fov_range=fov_range,
+            xc_range=xc_range, yc_range=yc_range, S_range=S_range,
             wavelength_range=wavelength_range, focal_length_range=focal_length_range
         )
     

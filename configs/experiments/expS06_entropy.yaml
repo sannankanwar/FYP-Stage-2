@@ -1,0 +1,39 @@
+# Experiment S06: Entropy Weighting
+# Weights = 1 / Range (Differential Entropy proxy)
+experiment_name: "expS06_entropy"
+description: "RawPhysicsLoss with Entropy weights (1/Range). S range [1, 40]."
+
+# Training
+epochs: 100
+batch_size: 8
+learning_rate: 0.001
+optimizer: "adam"
+scheduler: "plateau"
+lambda_param: 1.0
+lambda_physics: 0.5
+
+# Model
+model:
+  name: "fno_resnet18"
+  resolution: 1024
+  input_channels: 2
+  output_dim: 5
+  modes: 32
+
+# Data & Loss
+standardize_outputs: false
+loss_function: "raw_physics"
+grid_strategy: "random_all"
+
+# Weights (1/Range)
+# xc: 1000 -> 0.001
+# yc: 1000 -> 0.001
+# S: 39 -> 0.0256
+# wl: 0.3 -> 3.333
+# fl: 90 -> 0.0111
+loss_weights: [0.001, 0.001, 0.0256, 3.333, 0.0111]
+
+# Parameter ranges
+S_range: [1.0, 40.0]
+wavelength_range: [0.4, 0.7]
+focal_length_range: [10.0, 100.0]

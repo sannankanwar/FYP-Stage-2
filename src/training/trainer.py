@@ -199,7 +199,7 @@ class Trainer:
                 data, target = data.to(self.device), target.to(self.device)
                 output = self.model(data)
                 
-                if isinstance(self.criterion, (Naive5ParamMSELoss, WeightedStandardizedLoss, WeightedPhysicsLoss)):
+                if isinstance(self.criterion, (Naive5ParamMSELoss, WeightedStandardizedLoss, WeightedPhysicsLoss, AuxiliaryPhysicsLoss)):
                      loss, _ = self.criterion(output, target, data)
                 else:
                     current_target = target

@@ -16,10 +16,21 @@ class FNOResNet18(nn.Module):
         Input (2, H, W) → ResNet Stem → layer1-3 → FNO Block → layer4 → Pool → MLP → 5 params
     """
     def __init__(self, in_channels=2, output_dim=5, modes=32, fno_norm='instance', fno_activation='gelu',
+                 input_resolution=256,
                  xc_range=(-500, 500), yc_range=(-500, 500), fov_range=(1, 20),
                  wavelength_range=(0.4, 0.7), focal_length_range=(10, 100)):
         super().__init__()
         
+        # Resolution Adaptation
+        # FNO backbone is designed for 256x256. If input is larger, downsample first.
+        self.target_resolution = 256
+        self.downsampler = None
+        
+        if input_resolution > self.target_resolution:
+            factor = input_resolution // self.target_resolution
+            print(f"FNOResNet18: Adapting input {input_resolution}x{input_resolution} -> {self.target_resolution}x{self.target_resolution} (AvgPool k={factor})")
+            self.downsampler = nn.AvgPool2d(kernel_size=factor, stride=factor)
+            
         # Load ResNet18 backbone
         base = resnet18(weights=None)
         
@@ -56,6 +67,10 @@ class FNOResNet18(nn.Module):
         )
     
     def forward(self, x):
+        # Adaptation
+        if self.downsampler is not None:
+            x = self.downsampler(x)
+
         # Stem
         x = self.conv1(x)
         x = self.bn1(x)

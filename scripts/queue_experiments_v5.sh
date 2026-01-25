@@ -1,0 +1,40 @@
+#!/bin/bash
+# Queue Experiments v5 - Quick debug: Phase A only, 5 epochs
+# Input: configs/experiments_4/
+# Output: outputs_3/
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+CONFIG_DIR="$PROJECT_DIR/configs/experiments_4"
+OUTPUT_DIR="$PROJECT_DIR/outputs_3"
+
+mkdir -p "$OUTPUT_DIR"
+
+LOG_FILE="$OUTPUT_DIR/experiment_queue.log"
+echo "=== Quick Debug Experiments Started at $(date) ===" | tee -a "$LOG_FILE"
+
+CONFIGS=($(ls "$CONFIG_DIR"/*.yaml | sort))
+echo "Found ${#CONFIGS[@]} experiments to run (5 epochs each)" | tee -a "$LOG_FILE"
+
+for i in "${!CONFIGS[@]}"; do
+    CONFIG="${CONFIGS[$i]}"
+    EXP_NAME=$(basename "$CONFIG" .yaml)
+    
+    echo "" | tee -a "$LOG_FILE"
+    echo "=== [$((i+1))/${#CONFIGS[@]}] Starting: $EXP_NAME ===" | tee -a "$LOG_FILE"
+    echo "Time: $(date)" | tee -a "$LOG_FILE"
+    
+    uv run python "$PROJECT_DIR/scripts/train.py" \
+        --config "$CONFIG" \
+        2>&1 | tee -a "$LOG_FILE"
+    
+    echo "Completed: $EXP_NAME at $(date)" | tee -a "$LOG_FILE"
+    
+    python3 -c "import torch; torch.cuda.empty_cache()" 2>/dev/null || true
+    sleep 2
+done
+
+echo "" | tee -a "$LOG_FILE"
+echo "=== All Experiments Completed at $(date) ===" | tee -a "$LOG_FILE"

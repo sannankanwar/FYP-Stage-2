@@ -86,6 +86,83 @@ class RawPhysicsLoss(nn.Module):
         }
 
 
+class AdaptivePhysicsLoss(nn.Module):
+    """
+    Kendall's Aleatoric Uncertainty Loss.
+    Learns weights dynamically: L = (1/2sigma^2) * MSE + log(sigma)
+    """
+    def __init__(self, 
+                 num_params=5,
+                 lambda_param=1.0, 
+                 lambda_physics=0.5,
+                 window_size=100.0):
+        super().__init__()
+        self.lambda_param = lambda_param
+        self.lambda_physics = lambda_physics
+        self.window_size = window_size
+        self.mse = nn.MSELoss()
+        
+        # Learnable log variances (one per parameter)
+        # Initialize to 0.0 (sigma=1)
+        self.log_vars = nn.Parameter(torch.zeros(num_params))
+        
+    def forward(self, pred_params, true_params, input_images):
+        # 1. Adaptive Parameter Loss
+        diff = (pred_params - true_params) ** 2
+        precision = torch.exp(-self.log_vars)
+        
+        # Kendall Loss: sum( precision * diff + log_vars )
+        # Note: We average over batch, sum over params
+        loss_param = (precision * diff + self.log_vars).sum(dim=1).mean()
+        
+        # 2. Physics Reconstruction Loss (Standard MSE)
+        # Note: Could also make this adaptive, but keeping fixed for fairness
+        # Re-using logic from RawPhysicsLoss (refactor later?)
+        # For speed/DRY, let's copy the physics calc logic 
+        # (Ideally this should be a shared function but RawPhysicsLoss has identical logic)
+        
+        B, C, H, W = input_images.shape
+        device = input_images.device
+        
+        xc = pred_params[:, 0]
+        yc = pred_params[:, 1]
+        fov = pred_params[:, 2]
+        wavelength = pred_params[:, 3]
+        focal_length = pred_params[:, 4]
+        
+        grid_y, grid_x = torch.meshgrid(
+            torch.linspace(-0.5, 0.5, H, device=device),
+            torch.linspace(-0.5, 0.5, W, device=device),
+            indexing='ij'
+        )
+        grid_x = grid_x.unsqueeze(0).expand(B, -1, -1)
+        grid_y = grid_y.unsqueeze(0).expand(B, -1, -1)
+        
+        X_phys = xc.view(B, 1, 1) + self.window_size * grid_x
+        Y_phys = yc.view(B, 1, 1) + self.window_size * grid_y
+        
+        # Broadcast params
+        focal_length = focal_length.view(B, 1, 1)
+        wavelength = wavelength.view(B, 1, 1)
+        fov = fov.view(B, 1, 1)
+        
+        phi_unwrapped = compute_hyperbolic_phase(X_phys, Y_phys, focal_length, wavelength, theta=fov)
+        phi_wrapped = wrap_phase(phi_unwrapped)
+        reconstructed = get_2channel_representation(phi_wrapped).permute(0, 3, 1, 2)
+        
+        loss_physics = self.mse(reconstructed, input_images)
+        
+        total_loss = (self.lambda_param * loss_param) + (self.lambda_physics * loss_physics)
+        
+        return total_loss, {
+            "loss_param": loss_param.item(),
+            "loss_physics": loss_physics.item(),
+            "total_loss": total_loss.item(),
+            "sigma_xc": torch.exp(self.log_vars[0]).item(),
+            "sigma_wl": torch.exp(self.log_vars[3]).item()
+        }
+
+
 class Naive5ParamMSELoss(nn.Module):
     """
     Simple MSE Loss on all 5 parameters.

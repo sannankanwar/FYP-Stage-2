@@ -143,6 +143,7 @@ class WeightedPhysicsLoss(nn.Module):
         # Broadcast focal_length and wavelength to (B, 1, 1) for physics formula
         focal_length = focal_length.view(B, 1, 1)
         wavelength = wavelength.view(B, 1, 1)
+        fov = fov.view(B, 1, 1)  # Broadcast fov for grid compatibility
 
         # Forward Model
         phi_unwrapped = compute_hyperbolic_phase(X_phys, Y_phys, focal_length, wavelength, theta=fov)

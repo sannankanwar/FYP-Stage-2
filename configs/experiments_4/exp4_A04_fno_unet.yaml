@@ -2,7 +2,7 @@ experiment_name: exp4_A04_fno_unet
 description: 'Phase A: FNO-UNet'
 model: {name: fno_unet, output_dim: 5, modes: 32}
 training:
-  epochs: 5
+  epochs: 25
   batch_size: 16
   learning_rate: 0.001
   optimizer: adam

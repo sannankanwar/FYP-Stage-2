@@ -2,7 +2,7 @@ experiment_name: exp4_A02_fno_resnet50
 description: 'Phase A: FNO-ResNet50'
 model: {name: fno_resnet50, output_dim: 5, modes: 16}
 training:
-  epochs: 5
+  epochs: 25
   batch_size: 8
   learning_rate: 0.001
   optimizer: adam

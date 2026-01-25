@@ -2,7 +2,7 @@ experiment_name: exp4_A05_swin
 description: 'Phase A: Swin Transformer'
 model: {name: swin, output_dim: 5, window_size: 8, embed_dim: 96}
 training:
-  epochs: 5
+  epochs: 25
   batch_size: 16
   learning_rate: 0.001
   optimizer: adam

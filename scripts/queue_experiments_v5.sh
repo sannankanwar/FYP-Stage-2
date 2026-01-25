@@ -38,3 +38,8 @@ done
 
 echo "" | tee -a "$LOG_FILE"
 echo "=== All Experiments Completed at $(date) ===" | tee -a "$LOG_FILE"
+
+# Generate residual phase maps for all experiments
+echo "Generating residual phase maps..." | tee -a "$LOG_FILE"
+uv run python "$PROJECT_DIR/scripts/plot_residuals.py" --output-dir "$OUTPUT_DIR" 2>&1 | tee -a "$LOG_FILE"
+echo "=== Post-processing Complete ===" | tee -a "$LOG_FILE"

@@ -36,6 +36,10 @@ for i in "${!CONFIGS[@]}"; do
         2>&1 | tee -a "$LOG_FILE"
     
     echo "Completed: $EXP_NAME at $(date)" | tee -a "$LOG_FILE"
+    
+    # Clear GPU memory between experiments to prevent OOM
+    python3 -c "import torch; torch.cuda.empty_cache(); print('GPU memory cleared')" 2>/dev/null || true
+    sleep 2
 done
 
 echo "" | tee -a "$LOG_FILE"

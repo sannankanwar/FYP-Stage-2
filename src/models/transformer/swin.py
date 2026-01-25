@@ -231,7 +231,8 @@ class SwinTransformer(nn.Module):
             nn.Linear(final_dim, 256),
             nn.GELU(),
             nn.Dropout(0.1),
-            nn.Linear(256, output_dim)
+            nn.Linear(256, output_dim),
+            nn.Tanh()  # Bound output to [-1, 1] for normalized targets
         )
     
     def forward(self, x):

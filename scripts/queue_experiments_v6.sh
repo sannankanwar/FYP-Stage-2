@@ -42,4 +42,13 @@ echo "=== All Experiments Completed at $(date) ===" | tee -a "$LOG_FILE"
 # Generate comparison plots (residuals)
 echo "Generating residual phase maps..." | tee -a "$LOG_FILE"
 uv run python "$PROJECT_DIR/scripts/plot_residuals.py" --output-dir "$OUTPUT_DIR" 2>&1 | tee -a "$LOG_FILE"
+
+# Compare Learning Curves
+echo "Generating comparative loss curves..." | tee -a "$LOG_FILE"
+uv run python "$PROJECT_DIR/scripts/compare_experiments.py" --output-dir "$OUTPUT_DIR" 2>&1 | tee -a "$LOG_FILE"
+
+# Rank Models
+echo "Ranking models via Grid Search..." | tee -a "$LOG_FILE"
+uv run python "$PROJECT_DIR/scripts/rank_models.py" --output-dir "$OUTPUT_DIR" 2>&1 | tee -a "$LOG_FILE"
+
 echo "=== Post-processing Complete ===" | tee -a "$LOG_FILE"

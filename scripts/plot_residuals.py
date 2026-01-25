@@ -203,10 +203,10 @@ def main():
     output_dir = args.output_dir
     
     # Find all experiment directories
-    exp_dirs = sorted(glob(os.path.join(output_dir, "exp4_*")))
+    exp_dirs = sorted(glob(os.path.join(output_dir, "exp*")))
     
     if not exp_dirs:
-        print(f"No exp4_* directories found in {output_dir}")
+        print(f"No exp* directories found in {output_dir}")
         return
     
     print(f"Found {len(exp_dirs)} experiments")

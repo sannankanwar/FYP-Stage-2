@@ -17,6 +17,7 @@ def main():
     # Find all history.csv files
     # Structure: output_dir/EXP_NAME/history.csv
     exp_dirs = sorted(glob.glob(os.path.join(args.output_dir, "exp*")))
+    exp_dirs = [d for d in exp_dirs if os.path.isdir(d)]
     
     data = []
     

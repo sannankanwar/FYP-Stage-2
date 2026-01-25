@@ -98,6 +98,7 @@ def main():
         device = 'mps'
         
     exp_dirs = sorted(glob.glob(os.path.join(args.output_dir, "exp*")))
+    exp_dirs = [d for d in exp_dirs if os.path.isdir(d)]
     
     results = []
     

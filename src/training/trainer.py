@@ -293,7 +293,7 @@ class Trainer:
         
         # Generate residual phase map for one sample
         try:
-            self._plot_residual_phase(epoch_snap_dir, all_preds[0], all_targets[0])
+            self._plot_residual_phase(epoch_snap_dir, epoch)
         except Exception as e:
             print(f"Failed to generate residual plot: {e}")
 

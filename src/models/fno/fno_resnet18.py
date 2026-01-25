@@ -28,8 +28,37 @@ class FNOResNet18(nn.Module):
         
         if input_resolution > self.target_resolution:
             factor = input_resolution // self.target_resolution
-            print(f"FNOResNet18: Adapting input {input_resolution}x{input_resolution} -> {self.target_resolution}x{self.target_resolution} (AvgPool k={factor})")
-            self.downsampler = nn.AvgPool2d(kernel_size=factor, stride=factor)
+            print(f"FNOResNet18: Adapting input {input_resolution}x{input_resolution} -> {self.target_resolution}x{self.target_resolution} (Learnable Scaled Conv)")
+            
+            # Learnable Downsampling (Convolutional Adaptation)
+            # Example for 1024 -> 256 (4x downsampling)
+            # We use 2 stages of stride 2 to preserve more information than a single stride 4 conv.
+            
+            # Stage 1: 1024 -> 512. Expand channels to capture texture.
+            # Stage 2: 512 -> 256. Contract channels back to in_channels for ResNet stem.
+            
+            # Note: We avoid ReLU on the final output to allow negative values (like sin/cos inputs) to pass to ResNet stem.
+            
+            if factor == 4:
+                self.downsampler = nn.Sequential(
+                    nn.Conv2d(in_channels, 8, kernel_size=5, stride=2, padding=2, bias=False),
+                    nn.BatchNorm2d(8),
+                    nn.ReLU(inplace=True),
+                    nn.Conv2d(8, in_channels, kernel_size=3, stride=2, padding=1, bias=False),
+                    nn.BatchNorm2d(in_channels)
+                )
+            else:
+                # Fallback for other factors (e.g. 2x) or just use generic AvgPool if factor is odd
+                # But for now assuming factor=4 based on 1024->256 usage.
+                # If explicit factor != 4, we use a single strided conv if possible or fallback to AvgPool
+                if factor == 2:
+                     self.downsampler = nn.Sequential(
+                        nn.Conv2d(in_channels, in_channels, kernel_size=3, stride=2, padding=1, bias=False),
+                        nn.BatchNorm2d(in_channels)
+                    )
+                else:
+                    print(f"Warning: automatic conv downsampler only tuned for 2x/4x. Using AvgPool for factor {factor}.")
+                    self.downsampler = nn.AvgPool2d(kernel_size=factor, stride=factor)
             
         # Load ResNet18 backbone
         base = resnet18(weights=None)

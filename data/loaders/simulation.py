@@ -25,25 +25,30 @@ WAVELENGTH = 0.532       # micrometers
 def generate_single_sample(N,
                            xc,
                            yc,
-                           fov,
+                           S,
                            focal_length=FOCAL_LENGTH,
                            wavelength=WAVELENGTH,
-                           noise_std=0.0,
-                           window_size=100.0):
+                           noise_std=0.0):
     """
     Generate one synthetic sample using the centralized forward model.
-    fov is now treated as incident angle in degrees.
-    window_size is the physical width of the patch in micrometers.
+    
+    Args:
+        N: Grid resolution (NxN pixels)
+        xc, yc: Center coordinates of the observation window (micrometers)
+        S: Scaling - physical window size (micrometers). S=20 means 20μm × 20μm.
+        focal_length: Lens focal length (micrometers)
+        wavelength: Light wavelength (micrometers)
+        noise_std: Optional phase noise standard deviation
     """
-    # Coordinate grids in physical units
-    x_coords = np.linspace(xc - window_size / 2.0, xc + window_size / 2.0, N, dtype=np.float32)
-    y_coords = np.linspace(yc - window_size / 2.0, yc + window_size / 2.0, N, dtype=np.float32)
+    # Coordinate grids in physical units using S as window size
+    x_coords = np.linspace(xc - S / 2.0, xc + S / 2.0, N, dtype=np.float32)
+    y_coords = np.linspace(yc - S / 2.0, yc + S / 2.0, N, dtype=np.float32)
     X_grid, Y_grid = np.meshgrid(x_coords, y_coords)
 
-    # 1. Physics: Compute unwrapped phase (passing fov as theta)
-    phi_unwrapped = compute_hyperbolic_phase(X_grid, Y_grid, focal_length, wavelength, theta=fov)
+    # Physics: Compute unwrapped phase (ideal hyperbolic formula)
+    phi_unwrapped = compute_hyperbolic_phase(X_grid, Y_grid, focal_length, wavelength)
 
-    # 2. Augmentation: Add noise in phase domain
+    # Augmentation: Add noise in phase domain
     if noise_std > 0.0:
         phi_unwrapped = phi_unwrapped + np.random.normal(
             loc=0.0,
@@ -51,7 +56,7 @@ def generate_single_sample(N,
             size=phi_unwrapped.shape
         ).astype(np.float32)
 
-    # 3. Processing: Wrap and format
+    # Processing: Wrap and format
     phi_wrapped = wrap_phase(phi_unwrapped)
     input_sample = get_2channel_representation(phi_wrapped)
 
@@ -59,24 +64,24 @@ def generate_single_sample(N,
     try:
         import torch
         if isinstance(xc, torch.Tensor):
-            return input_sample, torch.stack([xc, yc, fov, torch.tensor(wavelength), torch.tensor(focal_length)])
+            return input_sample, torch.stack([xc, yc, S, torch.tensor(wavelength), torch.tensor(focal_length)])
     except ImportError:
         pass # torch not available, proceed with numpy
 
-    return input_sample, np.array([xc, yc, fov, wavelength, focal_length], dtype=np.float32)
+    return input_sample, np.array([xc, yc, S, wavelength, focal_length], dtype=np.float32)
 
 
 def generate_dataset(N,
                      num_samples,
                      xc_range=(-500.0, 500.0),
                      yc_range=(-500.0, 500.0),
-                     fov_range=(1.0, 20.0),
+                     S_range=(1.0, 40.0),
                      focal_length=FOCAL_LENGTH,
                      wavelength=WAVELENGTH,
                      noise_std=0.0,
                      seed=None):
     """
-    Generate a dataset of phase maps and corresponding [xc, yc, fov] labels.
+    Generate a dataset of phase maps and corresponding [xc, yc, S] labels.
     """
     if seed is not None:
         np.random.seed(seed)
@@ -87,13 +92,13 @@ def generate_dataset(N,
     for i in range(num_samples):
         xc = np.random.uniform(*xc_range)
         yc = np.random.uniform(*yc_range)
-        fov = np.random.uniform(*fov_range)
+        S = np.random.uniform(*S_range)
 
         inp, tgt = generate_single_sample(
             N=N,
             xc=xc,
             yc=yc,
-            fov=fov,
+            S=S,
             focal_length=focal_length,
             wavelength=wavelength,
             noise_std=noise_std
@@ -109,10 +114,9 @@ def generate_grid_dataset(xc_count,
                           yc_count,
                           xc_range=(-500.0, 500.0),
                           yc_range=(-500.0, 500.0),
-                          fov_range=(1.0, 20.0),
+                          S_range=(1.0, 40.0),
                           wavelength_range=(0.4, 0.7),
-                           focal_length_range=(10.0, 100.0),
-                          window_size=100.0,
+                          focal_length_range=(10.0, 100.0),
                           N=128,
                           noise_std=0.0,
                           grid_strategy="mean",
@@ -123,9 +127,10 @@ def generate_grid_dataset(xc_count,
     
     Args:
         xc_count, yc_count (int): Grid steps.
+        S_range: Range for scaling parameter (window size in micrometers)
         grid_strategy (str): 
-            - "mean": Fix fov/wl/fl to center of ranges (only test xc/yc)
-            - "random_fixed": Randomize fov/wl/fl once (still only tests xc/yc)
+            - "mean": Fix S/wl/fl to center of ranges (only test xc/yc)
+            - "random_fixed": Randomize S/wl/fl once (still only tests xc/yc)
             - "random_all": Randomize ALL 5 parameters per sample (true 5-param eval)
         offset (bool): If True, shift grid by 0.5 * step_size (Validation Set).
     """
@@ -141,7 +146,7 @@ def generate_grid_dataset(xc_count,
         for idx in range(num_samples):
             xc = np.random.uniform(*xc_range)
             yc = np.random.uniform(*yc_range)
-            fov = np.random.uniform(*fov_range)
+            S = np.random.uniform(*S_range)
             wavelength = np.random.uniform(*wavelength_range)
             focal_length = np.random.uniform(*focal_length_range)
             
@@ -149,11 +154,10 @@ def generate_grid_dataset(xc_count,
                 N=N,
                 xc=xc,
                 yc=yc,
-                fov=fov,
+                S=S,
                 focal_length=focal_length,
                 wavelength=wavelength,
-                noise_std=noise_std,
-                window_size=window_size
+                noise_std=noise_std
             )
             
             X[idx] = inp
@@ -162,7 +166,7 @@ def generate_grid_dataset(xc_count,
         metadata = {
             "xc_steps": None,
             "yc_steps": None,
-            "fov": "random",
+            "S": "random",
             "wavelength": "random",
             "focal_length": "random",
             "grid_shape": (xc_count, yc_count),
@@ -173,15 +177,15 @@ def generate_grid_dataset(xc_count,
         
     # Original strategies: mean or random_fixed
     if grid_strategy == "random_fixed":
-        fov = np.random.uniform(*fov_range)
+        S = np.random.uniform(*S_range)
         wavelength = np.random.uniform(*wavelength_range)
         focal_length = np.random.uniform(*focal_length_range)
     else: # "mean"
-        fov = (fov_range[0] + fov_range[1]) / 2.0
+        S = (S_range[0] + S_range[1]) / 2.0
         wavelength = (wavelength_range[0] + wavelength_range[1]) / 2.0
         focal_length = (focal_length_range[0] + focal_length_range[1]) / 2.0
 
-    # 2. Generate Grid Steps
+    # Generate Grid Steps
     x_step = (xc_range[1] - xc_range[0]) / xc_count
     y_step = (yc_range[1] - yc_range[0]) / yc_count
     
@@ -189,15 +193,12 @@ def generate_grid_dataset(xc_count,
     yc_steps = np.linspace(yc_range[0], yc_range[1], yc_count, dtype=np.float32)
     
     if offset:
-        # Shift by half step to interleave with training grid
-        # Careful not to go out of bounds? 
-        # For validation, testing interpolation is key.
         xc_steps += (x_step / 2.0)
         yc_steps += (y_step / 2.0)
 
     num_samples = xc_count * yc_count
     X = np.zeros((num_samples, N, N, 2), dtype=np.float32)
-    y = np.zeros((num_samples, 5), dtype=np.float32) # 5 Params
+    y = np.zeros((num_samples, 5), dtype=np.float32)
 
     for i, xc in enumerate(xc_steps):
         for j, yc in enumerate(yc_steps):
@@ -207,20 +208,19 @@ def generate_grid_dataset(xc_count,
                 N=N,
                 xc=xc,
                 yc=yc,
-                fov=fov,
+                S=S,
                 focal_length=focal_length,
                 wavelength=wavelength,
-                noise_std=noise_std,
-                window_size=window_size
+                noise_std=noise_std
             )
 
             X[idx] = inp
-            y[idx] = tgt # (5,)
+            y[idx] = tgt
 
     metadata = {
         "xc_steps": xc_steps,
         "yc_steps": yc_steps,
-        "fov": fov,
+        "S": S,
         "wavelength": wavelength,
         "focal_length": focal_length,
         "grid_shape": (xc_count, yc_count)
@@ -237,13 +237,12 @@ class OnTheFlyDataset(Dataset):
         self.length = length
         
         # Extract params
-        self.N = config.get("resolution", 256) # Default to 256 if not set, be careful with HighRes
+        self.N = config.get("resolution", 256)
         self.xc_range = tuple(config.get("xc_range", [-500.0, 500.0]))
         self.yc_range = tuple(config.get("yc_range", [-500.0, 500.0]))
-        self.fov_range = tuple(config.get("fov_range", [1.0, 20.0]))
+        self.S_range = tuple(config.get("S_range", [1.0, 40.0]))
         self.wavelength_range = tuple(config.get("wavelength_range", [0.4, 0.7]))
         self.focal_length_range = tuple(config.get("focal_length_range", [10.0, 100.0]))
-        self.window_size = config.get("window_size", 100.0)
         self.noise_std = config.get("noise_std", 0.0)
         
     def __len__(self):
@@ -253,7 +252,7 @@ class OnTheFlyDataset(Dataset):
         # Randomize parameters
         xc = np.random.uniform(*self.xc_range)
         yc = np.random.uniform(*self.yc_range)
-        fov = np.random.uniform(*self.fov_range)
+        S = np.random.uniform(*self.S_range)
         wavelength = np.random.uniform(*self.wavelength_range)
         focal_length = np.random.uniform(*self.focal_length_range)
         
@@ -261,11 +260,10 @@ class OnTheFlyDataset(Dataset):
             N=self.N,
             xc=xc,
             yc=yc,
-            fov=fov,
+            S=S,
             focal_length=focal_length,
             wavelength=wavelength,
-            noise_std=self.noise_std,
-            window_size=self.window_size
+            noise_std=self.noise_std
         )
         
         # inp is (H, W, 2), convert to (2, H, W) for PyTorch
@@ -284,11 +282,10 @@ class GridDataset(Dataset):
         
         xc_range = tuple(config.get("xc_range", [-500.0, 500.0]))
         yc_range = tuple(config.get("yc_range", [-500.0, 500.0]))
-        fov_range = tuple(config.get("fov_range", [1.0, 20.0]))
+        S_range = tuple(config.get("S_range", [1.0, 40.0]))
         wavelength_range = tuple(config.get("wavelength_range", [0.4, 0.7]))
         focal_length_range = tuple(config.get("focal_length_range", [10.0, 100.0]))
         grid_strategy = config.get("grid_strategy", "mean")
-        window_size = config.get("window_size", 100.0)
         noise_std = config.get("noise_std", 0.0)
         
         self.X, self.y, self.metadata = generate_grid_dataset(
@@ -296,13 +293,12 @@ class GridDataset(Dataset):
             yc_count=steps,
             xc_range=xc_range,
             yc_range=yc_range,
-            fov_range=fov_range,
+            S_range=S_range,
             wavelength_range=wavelength_range,
             focal_length_range=focal_length_range,
             N=self.N,
             noise_std=noise_std,
             grid_strategy=grid_strategy,
-            window_size=window_size,
             offset=offset,
             seed=seed
         )
@@ -315,3 +311,4 @@ class GridDataset(Dataset):
     
     def __getitem__(self, idx):
         return torch.from_numpy(self.X[idx]), torch.from_numpy(self.y[idx])
+

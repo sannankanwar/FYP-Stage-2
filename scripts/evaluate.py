@@ -39,15 +39,15 @@ def visualize_sample(input_tensor, true_params, pred_params, loss, title, output
     # Text info
     if len(true_params) == 5:
         info_text = (
-            f"TRUE: xc={true_params[0]:.2f}, yc={true_params[1]:.2f}, fov={true_params[2]:.2f}\n"
+            f"TRUE: xc={true_params[0]:.2f}, yc={true_params[1]:.2f}, S={true_params[2]:.2f}\n"
             f"      wl={true_params[3]*1000:.1f}nm, f={true_params[4]:.1f}um\n"
-            f"PRED: xc={pred_params[0]:.2f}, yc={pred_params[1]:.2f}, fov={pred_params[2]:.2f}\n"
+            f"PRED: xc={pred_params[0]:.2f}, yc={pred_params[1]:.2f}, S={pred_params[2]:.2f}\n"
             f"      wl={pred_params[3]*1000:.1f}nm, f={pred_params[4]:.1f}um"
         )
     else:
         info_text = (
-            f"TRUE: xc={true_params[0]:.2f}, yc={true_params[1]:.2f}, fov={true_params[2]:.2f}\n"
-            f"PRED: xc={pred_params[0]:.2f}, yc={pred_params[1]:.2f}, fov={pred_params[2]:.2f}"
+            f"TRUE: xc={true_params[0]:.2f}, yc={true_params[1]:.2f}, S={true_params[2]:.2f}\n"
+            f"PRED: xc={pred_params[0]:.2f}, yc={pred_params[1]:.2f}, S={pred_params[2]:.2f}"
         )
     plt.figtext(0.5, 0.05, info_text, ha="center", fontsize=12, bbox={"facecolor":"white", "alpha":0.8, "pad":5})
     
@@ -57,15 +57,15 @@ def visualize_sample(input_tensor, true_params, pred_params, loss, title, output
 
 def plot_scatter(y_true, y_pred, output_dir, title="Parameter Scatter Plots"):
     """
-    Plots True vs Predicted scatter plots for each parameter (xc, yc, fov).
+    Plots True vs Predicted scatter plots for each parameter (xc, yc, S).
     y_true, y_pred: (N, 3) arrays
     """
     num_params = y_true.shape[1]
     if num_params == 5:
-        params = ['xc', 'yc', 'fov', 'wavelength', 'focal_length']
+        params = ['xc', 'yc', 'S', 'wavelength', 'focal_length']
         fig, axes = plt.subplots(1, 5, figsize=(25, 5))
     else:
-        params = ['xc', 'yc', 'fov']
+        params = ['xc', 'yc', 'S']
         fig, axes = plt.subplots(1, 3, figsize=(18, 5))
     
     for i, param in enumerate(params):
@@ -217,7 +217,7 @@ def evaluate_grid(checkpoint_path, output_dir, device="cpu", steps=25):
     # Pull ranges from config or defaults
     xc_range = tuple(config.get("xc_range", (-500.0, 500.0)))
     yc_range = tuple(config.get("yc_range", (-500.0, 500.0)))
-    fov_range = tuple(config.get("fov_range", (1.0, 20.0))) # Support 5p range
+    S_range = tuple(config.get("S_range", (1.0, 40.0)))
     wavelength_range = tuple(config.get("wavelength_range", (0.4, 0.7)))
     focal_length_range = tuple(config.get("focal_length_range", (10.0, 100.0)))
 
@@ -226,11 +226,11 @@ def evaluate_grid(checkpoint_path, output_dir, device="cpu", steps=25):
         yc_count=steps,
         xc_range=xc_range,
         yc_range=yc_range,
-        fov_range=fov_range,
+        S_range=S_range,
         wavelength_range=wavelength_range,
         focal_length_range=focal_length_range,
         N=resolution,
-        grid_strategy="mean" # Consistent with training anchor
+        grid_strategy="mean"
     )
     
     # Initialize Normalizer if needed
@@ -245,7 +245,7 @@ def evaluate_grid(checkpoint_path, output_dir, device="cpu", steps=25):
         norm_ranges = {
             'xc': tuple(config.get("xc_range", (-500.0, 500.0))),
             'yc': tuple(config.get("yc_range", (-500.0, 500.0))),
-            'fov': tuple(config.get("fov_range", (1.0, 20.0))),
+            'S': tuple(config.get("S_range", (1.0, 40.0))),
             'wavelength': tuple(config.get("wavelength_range", (0.4, 0.7))),
             'focal_length': tuple(config.get("focal_length_range", (10.0, 100.0)))
         }
@@ -275,13 +275,9 @@ def evaluate_grid(checkpoint_path, output_dir, device="cpu", steps=25):
     # Denormalize if needed
     if normalizer:
         print("Denormalizing predictions...")
-        # Only denormalize the first 3 (xc, yc, fov)
-        # Assuming predictions might have more columns later? 
-        # But normalizer works on shape (B, 3) usually.
-        # The model output is (B, 3).
         predictions = normalizer.denormalize_tensor(predictions)
     
-    # Calculate Square Error per sample (Sum of squared errors for xc, yc, fov or just params?)
+    # Calculate Square Error per sample
     # Users usually care about spatial error (xc, yc) mostly. Let's do total parameter MSE.
     mse_per_sample = torch.sum((predictions - y_tensor)**2, dim=1).numpy()
     
@@ -301,7 +297,7 @@ def evaluate_grid(checkpoint_path, output_dir, device="cpu", steps=25):
     im = plt.imshow(mse_grid.T, origin='lower', extent=extent, cmap='viridis', aspect='auto', interpolation='nearest')
     plt.colorbar(im, label='MSE Loss')
     
-    plt.title(f"Loss Heatmap (FOV={metadata['fov']:.1f})\n{config.get('experiment_name', 'Unknown Experiment')}")
+    plt.title(f"Loss Heatmap (S={metadata['S']:.1f})\n{config.get('experiment_name', 'Unknown Experiment')}")
     plt.xlabel('XC (um)')
     plt.ylabel('YC (um)')
     

@@ -10,11 +10,9 @@ test_split: 0.1
 batch_size: 32
 num_workers: 4
 
-# Field of View (Degrees): 1 to 20
-fov_range: [1.0, 20.0]
-
-# Window Size (micrometers): Size of the imaged patch
-window_size: 100.0
+# Scaling (S): Physical window size in micrometers
+# S=1 means 1μm × 1μm, S=40 means 40μm × 40μm
+S_range: [1.0, 40.0]
 
 # Wavelength: 400nm to 700nm (micrometers)
 wavelength_range: [0.4, 0.7]
@@ -23,11 +21,11 @@ wavelength_range: [0.4, 0.7]
 focal_length_range: [10.0, 100.0]
 
 # Data Generation Strategy
-grid_strategy: "mean" # "mean" (fix constants to avg) or "random_fixed" (randomize constants once)
+grid_strategy: "random_all"  # Use random_all for true 5-param training
 
 # Evaluation Tiers
 eval:
-  fovs: [10.0, 40.0, 80.0]
+  S_values: [10.0, 20.0, 40.0]  # Renamed from fovs
   fast:
     xc_count: 10
     yc_count: 10
@@ -37,3 +35,4 @@ eval:
   final:
     xc_count: 50
     yc_count: 50
+

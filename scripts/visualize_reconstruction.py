@@ -41,55 +41,51 @@ def visualize_reconstruction(experiment_dir, num_samples=5):
         ranges = {
             'xc': [-500.0, 500.0],
             'yc': [-500.0, 500.0],
-            'fov': [1.0, 20.0],
+            'S': [1.0, 40.0],
             'wavelength': [0.4, 0.7],
             'focal_length': [10.0, 100.0]
         }
         # Override with config if present
         data_cfg = load_config("configs/data.yaml")
-        ranges['fov'] = data_cfg.get('fov_range', ranges['fov'])
+        ranges['S'] = data_cfg.get('S_range', ranges['S'])
         ranges['wavelength'] = data_cfg.get('wavelength_range', ranges['wavelength'])
         ranges['focal_length'] = data_cfg.get('focal_length_range', ranges['focal_length'])
         
         normalizer = ParameterNormalizer(ranges)
 
     # 3. Generate 5 Samples
-    # We use the center of the grid or random samples. 
-    # Let's use a 5-sample strip from the validation grid for consistency.
     N = config['model'].get("resolution", 256)
-    window_size = config.get("window_size", 100.0)
     
-    # We generate a few distinct samples
+    
+    # We generate a few distinct samples: (xc, yc, S, wavelength, focal_length)
     samples = []
-    # Sample 1: Center
-    samples.append((0.0, 0.0, 10.0, 0.55, 50.0))
-    # Sample 2: Offset
-    samples.append((200.0, -100.0, 5.0, 0.45, 30.0))
-    # Sample 3: High FOV
-    samples.append((-300.0, 300.0, 18.0, 0.65, 80.0))
-    # Sample 4: Low wavelength
-    samples.append((50.0, 50.0, 8.0, 0.41, 20.0))
+    # Sample 1: Center, small window
+    samples.append((0.0, 0.0, 20.0, 0.55, 50.0))
+    # Sample 2: Offset, medium window
+    samples.append((200.0, -100.0, 30.0, 0.45, 30.0))
+    # Sample 3: Large window
+    samples.append((-300.0, 300.0, 40.0, 0.65, 80.0))
+    # Sample 4: Small window, low wavelength
+    samples.append((50.0, 50.0, 15.0, 0.41, 20.0))
     # Sample 5: High focal length
-    samples.append((-150.0, -250.0, 12.0, 0.58, 95.0))
+    samples.append((-150.0, -250.0, 25.0, 0.58, 95.0))
     
     fig, axes = plt.subplots(num_samples, 3, figsize=(15, 5 * num_samples))
     plt.subplots_adjust(hspace=0.4)
 
     for i in range(num_samples):
-        xc, yc, fov, wl, fl = samples[i]
+        xc, yc, S, wl, fl = samples[i]
         
-        # Generate Ground Truth Input & Phase
-        # physical grids
-        # physical grids (window_size instead of fov)
-        x_coords = np.linspace(xc - window_size / 2.0, xc + window_size / 2.0, N, dtype=np.float32)
-        y_coords = np.linspace(yc - window_size / 2.0, yc + window_size / 2.0, N, dtype=np.float32)
+        # Generate Ground Truth Phase using S as window size
+        x_coords = np.linspace(xc - S / 2.0, xc + S / 2.0, N, dtype=np.float32)
+        y_coords = np.linspace(yc - S / 2.0, yc + S / 2.0, N, dtype=np.float32)
         X_grid, Y_grid = np.meshgrid(x_coords, y_coords)
         
-        phi_gt_unwrapped = compute_hyperbolic_phase(X_grid, Y_grid, fl, wl, theta=fov)
+        phi_gt_unwrapped = compute_hyperbolic_phase(X_grid, Y_grid, fl, wl)
         phi_gt = wrap_phase(phi_gt_unwrapped)
         
         # Prepare input for model
-        input_data, _ = generate_single_sample(N, xc, yc, fov, fl, wl, window_size=window_size)
+        input_data, _ = generate_single_sample(N, xc, yc, S, fl, wl)
         # input is (H, W, 2), convert to (B, 2, H, W)
         input_tensor = torch.from_numpy(np.transpose(input_data, (2, 0, 1))).unsqueeze(0)
         
@@ -101,11 +97,13 @@ def visualize_reconstruction(experiment_dir, num_samples=5):
             else:
                 pred = pred_norm.squeeze(0).numpy()
         
-        p_xc, p_yc, p_fov, p_wl, p_fl = pred
+        p_xc, p_yc, p_S, p_wl, p_fl = pred
         
-        # Reconstruct Phase from Prediction
-        # Grid must be same as GT for comparison
-        phi_pred_unwrapped = compute_hyperbolic_phase(X_grid, Y_grid, p_fl, p_wl, theta=p_fov)
+        # Reconstruct Phase from Prediction using predicted S
+        x_pred = np.linspace(p_xc - p_S / 2.0, p_xc + p_S / 2.0, N, dtype=np.float32)
+        y_pred = np.linspace(p_yc - p_S / 2.0, p_yc + p_S / 2.0, N, dtype=np.float32)
+        X_pred, Y_pred = np.meshgrid(x_pred, y_pred)
+        phi_pred_unwrapped = compute_hyperbolic_phase(X_pred, Y_pred, p_fl, p_wl)
         phi_pred = wrap_phase(phi_pred_unwrapped)
         
         # Error Map
@@ -115,13 +113,13 @@ def visualize_reconstruction(experiment_dir, num_samples=5):
 
         # Plotting
         ax_gt = axes[i, 0]
-        im_gt = ax_gt.imshow(phi_gt, extent=[-window_size/2, window_size/2, -window_size/2, window_size/2], cmap='twilight')
-        ax_gt.set_title(f"GT Phase\n$\lambda$={wl*1000:.0f}nm, f={fl:.1f}$\mu$m, $\\theta$={fov:.1f}$^\circ$")
+        im_gt = ax_gt.imshow(phi_gt, extent=[-S/2, S/2, -S/2, S/2], cmap='twilight')
+        ax_gt.set_title(f"GT Phase\n$\\lambda$={wl*1000:.0f}nm, f={fl:.1f}$\\mu$m, S={S:.1f}$\\mu$m")
         plt.colorbar(im_gt, ax=ax_gt)
 
         ax_pred = axes[i, 1]
-        im_pred = ax_pred.imshow(phi_pred, extent=[-window_size/2, window_size/2, -window_size/2, window_size/2], cmap='twilight')
-        ax_pred.set_title(f"Pred Phase\n$\lambda$={p_wl*1000:.0f}nm, f={p_fl:.1f}$\mu$m, $\\theta$={p_fov:.1f}$^\circ$")
+        im_pred = ax_pred.imshow(phi_pred, extent=[-p_S/2, p_S/2, -p_S/2, p_S/2], cmap='twilight')
+        ax_pred.set_title(f"Pred Phase\n$\lambda$={p_wl*1000:.0f}nm, f={p_fl:.1f}$\mu$m, S={p_S:.1f}$\mu$m")
         plt.colorbar(im_pred, ax=ax_pred)
 
         ax_err = axes[i, 2]

@@ -12,7 +12,7 @@ class ParameterNormalizer:
         self.param_names = []
         
         # Order of parameters in the tensor
-        self.param_order = ['xc', 'yc', 'fov', 'wavelength', 'focal_length']
+        self.param_order = ['xc', 'yc', 'S', 'wavelength', 'focal_length']
         
         self._compute_stats(ranges)
 

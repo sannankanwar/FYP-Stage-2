@@ -53,7 +53,7 @@ def test_5param_pipeline():
     ranges = {
         'xc': dataset.xc_range,
         'yc': dataset.yc_range,
-        'fov': dataset.fov_range,
+        'S': dataset.S_range,
         'wavelength': dataset.wavelength_range,
         'focal_length': dataset.focal_length_range
     }
@@ -87,7 +87,6 @@ def test_5param_pipeline():
     loss_fn = WeightedPhysicsLoss(
         lambda_param=1.0, 
         lambda_physics=0.1, 
-        window_size=test_config.get('window_size', 100.0),
         normalizer=normalizer
     )
     

@@ -11,10 +11,8 @@ training:
   scheduler_factor: 0.5
   standardize_outputs: true
   resolution: 1024
-  loss_function: auxiliary_physics
+  loss_function: weighted_physics
   loss_weights: [1.0, 1.0, 10.0, 30.0, 30.0]
   lambda_param: 1.0
   lambda_physics: 0.5
-  lambda_gradient: 0.2
-  lambda_fringe: 0.2
 data: {grid_strategy: random_all, window_size: 100.0}

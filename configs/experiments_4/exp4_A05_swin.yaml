@@ -3,7 +3,7 @@ description: 'Phase A: Swin Transformer'
 model: {name: swin, output_dim: 5, window_size: 8, embed_dim: 96}
 training:
   epochs: 25
-  batch_size: 16
+  batch_size: 4
   learning_rate: 0.001
   optimizer: adam
   scheduler: plateau

@@ -1,6 +1,6 @@
 experiment_name: exp4_A06_gan
 description: 'Phase A: GAN Inverter'
-model: {name: gan, output_dim: 5}
+model: {name: gan_inverter, output_dim: 5}
 training:
   epochs: 25
   batch_size: 16

@@ -29,7 +29,7 @@ class WindowAttention(nn.Module):
     def __init__(self, dim, window_size, num_heads):
         super().__init__()
         self.dim = dim
-        self.window_size = window_size
+        self.window_size = int(window_size)
         self.num_heads = num_heads
         self.scale = (dim // num_heads) ** -0.5
         

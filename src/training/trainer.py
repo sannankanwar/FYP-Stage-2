@@ -171,7 +171,7 @@ class Trainer:
             output = self.model(data)
             
             # Advanced Losses handle standardization internally via self.normalizer
-            if isinstance(self.criterion, (Naive5ParamMSELoss, WeightedStandardizedLoss, WeightedPhysicsLoss)):
+            if isinstance(self.criterion, (Naive5ParamMSELoss, WeightedStandardizedLoss, WeightedPhysicsLoss, AuxiliaryPhysicsLoss)):
                  # These accept (pred, target, input_images)
                  loss, details = self.criterion(output, target, data)
             else:

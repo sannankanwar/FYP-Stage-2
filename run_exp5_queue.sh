@@ -1,7 +1,6 @@
 #!/bin/bash
 # run_exp5_queue.sh
-# Robust, sequential runner for Experiment Suite 5.
-# Handles directory resolution, error checking, automated aggregation, and scheduler policy.
+# Robust, sequential runner with failure diagnostics.
 
 set -u
 
@@ -17,7 +16,14 @@ fi
 
 echo "Using Python: $PYTHON_CMD ($(which $PYTHON_CMD))"
 
-# 1. Resolve Root Directory (independent of where script is called)
+# Check Environment
+echo "Checking Environment..."
+$PYTHON_CMD -c "import torch; import numpy; import yaml; print('Environment OK: Torch ' + torch.__version__)" || {
+    echo "❌ [Fatal] Environment check failed. Missing dependencies?"
+    exit 1
+}
+
+# 1. Resolve Root Directory
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "${ROOT_DIR}"
 echo "Working Directory: $(pwd)"
@@ -28,13 +34,9 @@ OUTPUT_DIR="outputs_exp5"
 mkdir -p "${OUTPUT_DIR}"
 
 SUMMARY_JSON="${OUTPUT_DIR}/queue_summary.json"
-echo "[" > "${SUMMARY_JSON}" # Init JSON array
+echo "[" > "${SUMMARY_JSON}"
 
 # 3. Experiments
-echo "========================================================"
-echo "🚀 Starting Experiment Suite 5 (Sequential Queue)"
-echo "========================================================"
-
 FAILED_RUNS=0
 TOTAL_RUNS=4
 RUN_COUNT=0
@@ -43,10 +45,7 @@ append_summary() {
     local run_id=$1
     local status=$2
     local reason=$3
-    
-    # Comma if not first
     if [ "$RUN_COUNT" -gt 0 ]; then echo "," >> "${SUMMARY_JSON}"; fi
-    
     echo "  { \"run_id\": \"$run_id\", \"status\": \"$status\", \"reason\": \"$reason\" }" >> "${SUMMARY_JSON}"
     RUN_COUNT=$((RUN_COUNT + 1))
 }
@@ -58,10 +57,17 @@ run_experiment() {
     local run_dir="${OUTPUT_DIR}/${run_id}"
     local log_file="${OUTPUT_DIR}/${run_id}.log"
     
-    echo "[Queue] Starting ${run_id} using ${config_name}..."
+    echo "--------------------------------------------------------"
+    echo "[Queue] Starting ${run_id}..."
+    echo "        Config: ${config_path}"
     echo "        Log: ${log_file}"
     
-    # Use Detected Python
+    # Check if config exists
+    if [ ! -f "${config_path}" ]; then
+         echo "❌ [Failure] Config file not found: ${config_path}"
+         return 1
+    fi
+    
     nohup $PYTHON_CMD -m src.main \
         --config "${config_path}" \
         --epochs 100 \
@@ -75,15 +81,19 @@ run_experiment() {
     
     if [ $exit_code -ne 0 ]; then
         echo "❌ [Failure] ${run_id} crashed with exit code ${exit_code}."
+        echo "👇 --- LAST 50 LINES OF LOG --- 👇"
+        tail -n 50 "${log_file}"
+        echo "👆 ---------------------------- 👆"
+        
         append_summary "${run_id}" "FAILURE" "Crash (Exit ${exit_code})"
         FAILED_RUNS=$((FAILED_RUNS + 1))
         return 1
     fi
     
-    # Check if run produced the best_metrics.json (Success Contract)
     if [ ! -f "${run_dir}/best_metrics.json" ]; then
-        echo "❌ [Failure] ${run_id} did not produce best_metrics.json."
-        echo "   Check log: ${log_file}"
+        echo "❌ [Failure] ${run_id} missing best_metrics.json."
+        echo "👇 --- LAST 20 LINES OF LOG --- 👇"
+        tail -n 20 "${log_file}"
         append_summary "${run_id}" "FAILURE" "Missing best_metrics.json"
         FAILED_RUNS=$((FAILED_RUNS + 1))
         return 1
@@ -99,41 +109,32 @@ run_experiment "exp5_2_gradflow.yaml" "exp5_2"
 run_experiment "exp5_3_kendall.yaml" "exp5_3"
 run_experiment "exp5_4_pinn.yaml" "exp5_4"
 
-echo "]" >> "${SUMMARY_JSON}" # Close array
+echo "]" >> "${SUMMARY_JSON}"
 
 echo "========================================================"
-echo "📊 Running Aggregator (Phase 1 Analysis)"
+echo "📊 Phase 1 Summary"
 echo "========================================================"
-
-AGG_LOG="${OUTPUT_DIR}/aggregation.log"
-
 if [ $FAILED_RUNS -eq $TOTAL_RUNS ]; then
-    echo "❌ All experiments failed. Aborting aggregation."
+    echo "❌ All experiments failed. Stopping."
     exit 1
 fi
 
+AGG_LOG="${OUTPUT_DIR}/aggregation.log"
 $PYTHON_CMD scripts/select_best_run.py --suite_dir "${OUTPUT_DIR}" > "${AGG_LOG}" 2>&1
 AGG_EXIT=$?
 
 if [ $AGG_EXIT -ne 0 ]; then
-    echo "❌ Aggregation Failed. See ${AGG_LOG}"
-    cat "${AGG_LOG}"
+    echo "❌ Aggregation Failed."
+    tail -n 20 "${AGG_LOG}"
     exit 1
 fi
 
 echo "✅ Aggregation Complete."
-cat "${AGG_LOG}"
 
 # 4. Extension Run
-echo "========================================================"
-echo "🚀 Phase 2: Extension Run"
-echo "========================================================"
-
-# Read Winner from JSON (Robust Python One-Liner)
 WINNER_ID=$($PYTHON_CMD -c "import json; print(json.load(open('${OUTPUT_DIR}/best_run_selection.json'))['winner_run_id'])")
 echo "🏆 Winner ID: ${WINNER_ID}"
 
-# Map Winner ID to Config (Robust Mapping)
 if [[ "${WINNER_ID}" == "exp5_1" ]]; then EXT_CONFIG="${EXPERIMENT_DIR}/exp5_1_unitstd.yaml"; fi
 if [[ "${WINNER_ID}" == "exp5_2" ]]; then EXT_CONFIG="${EXPERIMENT_DIR}/exp5_2_gradflow.yaml"; fi
 if [[ "${WINNER_ID}" == "exp5_3" ]]; then EXT_CONFIG="${EXPERIMENT_DIR}/exp5_3_kendall.yaml"; fi
@@ -144,8 +145,6 @@ RESUME_CKPT="${OUTPUT_DIR}/${WINNER_ID}/checkpoints/best_model.pth"
 EXT_LOG="${OUTPUT_DIR}/${WINNER_ID}_ext.log"
 
 echo "Extending ${WINNER_ID} to 350 epochs..."
-echo "Resume: ${RESUME_CKPT}"
-
 nohup $PYTHON_CMD -m src.main \
     --config "${EXT_CONFIG}" \
     --epochs 350 \
@@ -154,18 +153,11 @@ nohup $PYTHON_CMD -m src.main \
     --resume-checkpoint "${RESUME_CKPT}" \
     > "${EXT_LOG}" 2>&1 &
     
-EXT_PID=$!
-wait $EXT_PID
-
+wait $!
 if [ ! -f "${EXT_RUN_DIR}/best_metrics.json" ]; then
     echo "❌ [Failure] Extension run failed."
+    tail -n 50 "${EXT_LOG}"
     exit 1
 fi
 
-echo "========================================================"
 echo "🎉 Benchmark Suite Complete."
-echo "   Summary: ${SUMMARY_JSON}"
-echo "   Selection: ${OUTPUT_DIR}/best_run_selection.json"
-echo "   Winner: ${WINNER_ID}"
-echo "   Failed Runs: ${FAILED_RUNS}"
-echo "========================================================"

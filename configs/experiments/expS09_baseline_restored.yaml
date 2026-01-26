@@ -1,0 +1,35 @@
+# Experiment S09: Baseline Restored (exp2_A01 equivalent)
+# Pure Parameter Regression (WeightedStandardizedLoss). No Physics component.
+# This replicates the "best performing" setup from Phase 1/2.
+experiment_name: "expS09_baseline_restored"
+description: "Baseline FNO-ResNet18 with WeightedStandardizedLoss (Param Only). Standardized Outputs."
+
+# Training
+epochs: 100
+batch_size: 32  # exp2 used 32
+learning_rate: 0.001
+optimizer: "adam"
+scheduler: "plateau"
+scheduler_patience: 10
+scheduler_factor: 0.1
+
+# Model
+model:
+  name: "fno_resnet18"
+  resolution: 1024
+  input_channels: 2
+  output_dim: 5
+  modes: 32
+
+# Data & Loss
+standardize_outputs: true  # CRITICAL: exp2 used standardization
+loss_function: "weighted_standardized"  # Pure param loss
+grid_strategy: "random_all"
+
+# Weights from exp2_A01
+loss_weights: [1.0, 1.0, 1.0, 10.0, 10.0]
+
+# Parameter ranges
+S_range: [1.0, 40.0]
+wavelength_range: [0.4, 0.7]
+focal_length_range: [10.0, 100.0]

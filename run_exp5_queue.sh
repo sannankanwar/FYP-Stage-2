@@ -36,7 +36,7 @@ run_experiment() {
         --config "${config_path}" \
         --epochs 100 \
         --seed 42 \
-        --run_dir "${run_dir}" \
+        --run-dir "${run_dir}" \
         > "${log_file}" 2>&1 &
         
     local pid=$!
@@ -100,8 +100,8 @@ nohup python -m src.main \
     --config "${EXT_CONFIG}" \
     --epochs 350 \
     --seed 42 \
-    --run_dir "${EXT_RUN_DIR}" \
-    --resume_checkpoint "${RESUME_CKPT}" \
+    --run-dir "${EXT_RUN_DIR}" \
+    --resume-checkpoint "${RESUME_CKPT}" \
     > "${EXT_LOG}" 2>&1 &
     
 EXT_PID=$!

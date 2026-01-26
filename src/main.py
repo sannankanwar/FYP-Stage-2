@@ -35,6 +35,9 @@ def main():
     parser.add_argument("--model-config", type=str, default="configs/model.yaml", help="Path to model config")
     parser.add_argument("--data-config", type=str, default="configs/data.yaml", help="Path to data config")
     parser.add_argument("--output-dir", type=str, help="Root directory for outputs (overrides config)")
+    parser.add_argument("--run-dir", type=str, help="Alias for --output-dir")
+    parser.add_argument("--epochs", type=int, help="Override number of epochs")
+    parser.add_argument("--resume-checkpoint", type=str, help="Path to checkpoint to resume from (loads weights)")
     parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility")
     args = parser.parse_args()
 
@@ -59,8 +62,15 @@ def main():
     if 'training' in train_config and isinstance(train_config['training'], dict):
         full_config.update(train_config['training'])
         
+    # CLI Overrides
     if args.output_dir:
         full_config['output_dir'] = args.output_dir
+    elif args.run_dir: # Alias support
+        full_config['output_dir'] = args.run_dir
+        
+    if args.epochs:
+        print(f"CLI Override: Epochs {full_config.get('epochs')} -> {args.epochs}")
+        full_config['epochs'] = args.epochs
         
     # Final check on critical parameters
     model_name = full_config.get('name', 'spectral_resnet')
@@ -82,6 +92,7 @@ def main():
     print(f"Wavelength Range: {full_config.get('wavelength_range')}")
     print(f"Focal Length Range: {full_config.get('focal_length_range')}")
     print(f"Seed: {args.seed}")
+    print(f"Resume Checkpoint: {args.resume_checkpoint if args.resume_checkpoint else 'None'}")
     print(f"-----------------------------")
 
     print("Initializing Data Loaders...")
@@ -108,6 +119,23 @@ def main():
     print(f"Initializing Model: {full_config.get('name')}...")
     model = get_model(full_config)
     
+    if args.resume_checkpoint:
+        print(f"Loading weights from {args.resume_checkpoint}...")
+        checkpoint = torch.load(args.resume_checkpoint, map_location=torch.device("cpu")) # Load to CPU first
+        # Handle 'model_state_dict' key if present, else assume direct state_dict
+        if 'model_state_dict' in checkpoint:
+            state_dict = checkpoint['model_state_dict']
+        else:
+            state_dict = checkpoint
+        
+        try:
+            model.load_state_dict(state_dict)
+            print("Weights loaded successfully.")
+        except Exception as e:
+             print(f"Error loading weights: {e}")
+             print("Attempting strict=False load...")
+             model.load_state_dict(state_dict, strict=False)
+
     print("Initializing Trainer...")
     trainer = Trainer(full_config, model, train_loader, val_loader)
 

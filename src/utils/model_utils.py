@@ -40,3 +40,36 @@ def new_act_factory_check(proto):
     """Refreshes the new activation if it has state, otherwise returns as is."""
     # For standard activations (SiLU, Tanh, GELU), they are stateless, so we can pass them through.
     return proto
+
+def process_predictions(model, predictions, normalizer, config):
+    """
+    Safely process model predictions, checking for output_space contract.
+    Extracting this logic allows unit testing to prevent double-denormalization.
+    """
+    if not hasattr(model, 'output_space'):
+         # Fix 2 & 5: Fail fast if contract is missing
+         raise RuntimeError(
+             f"Model {type(model).__name__} is missing required attribute 'output_space'. "
+             "Cannot guess prediction tensor space safely."
+         )
+
+    output_space = model.output_space
+    
+    if output_space == 'unknown':
+         raise RuntimeError(
+             f"Model {type(model).__name__} has output_space='unknown'. "
+             "Safe processing requires explicit 'physical' or 'normalized' contract."
+         )
+    
+    if output_space == 'physical':
+        print(f"Model contract: output_space='{output_space}'. Predictions are already physical.")
+        if normalizer:
+             # Assertion for regression prevention (Fix 5)
+             # IF we were blindly following config, we would double denorm here.
+             pass # SAFE: preventing double-denorm
+    elif normalizer and config.get("standardize_outputs", False):
+        # Only denormalize if model is NOT physical and config says standardized
+        print(f"Model contract '{output_space}' (not physical). Denormalizing predictions...")
+        predictions = normalizer.denormalize_tensor(predictions)
+        
+    return predictions

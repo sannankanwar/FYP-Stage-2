@@ -26,29 +26,6 @@ class Trainer:
         print(f"Using device: {self.device}")
         self.model = self.model.to(self.device)
         
-        # Setup Optimizer
-        lr = float(config.get("learning_rate", 1e-3))
-        opt_name = config.get("optimizer", "adam").lower()
-        
-        if opt_name == "muon":
-            from src.training.optimizers import Muon
-            print("Using Muon Optimizer")
-            self.optimizer = Muon(model.parameters(), lr=lr) 
-        else:
-            print("Using Adam Optimizer")
-            self.optimizer = optim.Adam(model.parameters(), lr=lr)
-            
-        # Setup Scheduler
-        self.scheduler = None
-        scheduler_name = config.get("scheduler", None)
-        if scheduler_name == "plateau":
-            print("Using ReduceLROnPlateau Scheduler")
-            patience = int(config.get("scheduler_patience", 10))
-            factor = float(config.get("scheduler_factor", 0.1))
-            self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-                self.optimizer, mode='min', patience=patience, factor=factor
-            )
-        
         # Setup Normalizer
         self.normalizer = None
         if config.get("standardize_outputs", False):
@@ -63,15 +40,43 @@ class Trainer:
             }
             self.normalizer = ParameterNormalizer(ranges)
 
-        # Setup Loss Function
+        # Setup Loss Function (MOVED BEFORE OPTIMIZER)
         loss_name = config.get("loss_function", "mse")
+        
+        # Imports specific to new losses (if needed, but they are in the same file)
+        from src.training.loss import (
+            GradientConsistencyLoss, KendallUncertaintyLoss, PhysicsConsistencyLoss
+        )
+        
         if loss_name == "naive_5param":
-            print("Using Naive5ParamMSELoss")
-            self.criterion = Naive5ParamMSELoss(normalizer=self.normalizer)
+            raise RuntimeError(
+                "Naive5ParamMSELoss is deprecated and unsafe. "
+                "It mixes physical and normalized spaces and is permanently disabled."
+            )
         elif loss_name == "weighted_standardized":
             print("Using WeightedStandardizedLoss")
             weights = config.get("loss_weights", [1.0, 1.0, 1.0, 10.0, 10.0])
             self.criterion = WeightedStandardizedLoss(weights=weights, normalizer=self.normalizer)
+        elif loss_name == "gradient_consistency": # Loss 2
+            print("Using GradientConsistencyLoss")
+            weight = float(config.get("gradient_weight", 1.0))
+            self.criterion = GradientConsistencyLoss(normalizer=self.normalizer, gradient_weight=weight)
+        elif loss_name == "kendall": # Loss 3
+            print("Using KendallUncertaintyLoss")
+            init_var = float(config.get("init_log_var", 0.0))
+            self.criterion = KendallUncertaintyLoss(normalizer=self.normalizer, init_var=init_var)
+        elif loss_name == "pinn": # Deprecated Key
+             raise ValueError(
+                "The loss key 'pinn' is deprecated. Use 'physics_consistency' instead. "
+                "The class has been renamed to PhysicsConsistencyLoss to reflect its true nature."
+             )
+        elif loss_name == "physics_consistency": # Loss 4
+            print("Using PhysicsConsistencyLoss")
+            weight = float(config.get("physics_weight", 0.1)) # Renamed param
+            # Fallback for old configs if needed? User said "Do not change training behavior". 
+            # If I error on 'pinn', I must update the config file.
+            # I will expect config update.
+            self.criterion = PhysicsConsistencyLoss(normalizer=self.normalizer, physics_weight=weight)
         elif loss_name == "huber":
             print("Using RobustHuberLoss")
             self.criterion = RobustHuberLoss(normalizer=self.normalizer)
@@ -87,19 +92,42 @@ class Trainer:
         elif loss_name == "biweight":
             print("Using BiweightRegressionLoss (Tukey)")
             self.criterion = BiweightRegressionLoss(normalizer=self.normalizer)
-            
-        # Old Physics Losses (Commented out mapping to match loss.py)
-        # elif loss_name == "weighted_physics": ...
-        # elif loss_name == "auxiliary_physics": ...
-        # elif loss_name == "raw_physics": ...
-        # elif loss_name == "adaptive_physics": ...
         else:
             print(f"Using Standard MSELoss (Fallback for '{loss_name}')")
             self.criterion = nn.MSELoss()
             
-        # Move criterion to device (important for losses with buffers)
+        # Move criterion to device (important for losses with buffers/params)
         if isinstance(self.criterion, nn.Module):
             self.criterion = self.criterion.to(self.device)
+
+        # Setup Optimizer (AFTER LOSS so we can include loss params)
+        lr = float(config.get("learning_rate", 1e-3))
+        opt_name = config.get("optimizer", "adam").lower()
+        
+        # Collect parameters (Model + Loss)
+        params_to_optimize = list(model.parameters())
+        if isinstance(self.criterion, nn.Module) and len(list(self.criterion.parameters())) > 0:
+            print(f"Adding {len(list(self.criterion.parameters()))} parameters from Loss function to Optimizer.")
+            params_to_optimize += list(self.criterion.parameters())
+        
+        if opt_name == "muon":
+            from src.training.optimizers import Muon
+            print("Using Muon Optimizer")
+            self.optimizer = Muon(params_to_optimize, lr=lr) 
+        else:
+            print("Using Adam Optimizer")
+            self.optimizer = optim.Adam(params_to_optimize, lr=lr)
+            
+        # Setup Scheduler
+        self.scheduler = None
+        scheduler_name = config.get("scheduler", None)
+        if scheduler_name == "plateau":
+            print("Using ReduceLROnPlateau Scheduler")
+            patience = int(config.get("scheduler_patience", 10))
+            factor = float(config.get("scheduler_factor", 0.1))
+            self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+                self.optimizer, mode='min', patience=patience, factor=factor
+            )
         
         # NOTE: Removed fixed anchor grid methodology
         # Training now uses only random on-the-fly data for all epochs
@@ -185,7 +213,10 @@ class Trainer:
             
             # Advanced Losses handle standardization internally via self.normalizer
             # Advanced Losses handle standardization internally via self.normalizer
-            if isinstance(self.criterion, (Naive5ParamMSELoss, WeightedStandardizedLoss, RobustHuberLoss, RobustLogCoshLoss, LogSpaceMSELoss, WingRegressionLoss, BiweightRegressionLoss)):
+            from src.training.loss import (
+                GradientConsistencyLoss, KendallUncertaintyLoss, PhysicsConsistencyLoss
+            )
+            if isinstance(self.criterion, (Naive5ParamMSELoss, WeightedStandardizedLoss, RobustHuberLoss, RobustLogCoshLoss, LogSpaceMSELoss, WingRegressionLoss, BiweightRegressionLoss, GradientConsistencyLoss, KendallUncertaintyLoss, PhysicsConsistencyLoss)):
                  # These accept (pred, target, input_images)
                  loss, details = self.criterion(output, target, data)
             else:
@@ -213,7 +244,10 @@ class Trainer:
                 data, target = data.to(self.device), target.to(self.device)
                 output = self.model(data)
                 
-                if isinstance(self.criterion, (Naive5ParamMSELoss, WeightedStandardizedLoss, RobustHuberLoss, RobustLogCoshLoss, LogSpaceMSELoss, WingRegressionLoss, BiweightRegressionLoss)):
+                from src.training.loss import (
+                    GradientConsistencyLoss, KendallUncertaintyLoss, PhysicsConsistencyLoss
+                )
+                if isinstance(self.criterion, (Naive5ParamMSELoss, WeightedStandardizedLoss, RobustHuberLoss, RobustLogCoshLoss, LogSpaceMSELoss, WingRegressionLoss, BiweightRegressionLoss, GradientConsistencyLoss, KendallUncertaintyLoss, PhysicsConsistencyLoss)):
                      loss, _ = self.criterion(output, target, data)
                      loss, _ = self.criterion(output, target, data)
                 else:
@@ -244,9 +278,12 @@ class Trainer:
                 data = data.to(self.device)
                 output = self.model(data)
                 
-                # Denormalize output for plotting real units
-                if self.normalizer:
-                    output = self.normalizer.denormalize_tensor(output)
+                # Denormalize based on Model Contract
+                output_space = getattr(self.model, 'output_space', 'unknown')
+                if output_space == 'physical':
+                     pass # Do nothing, output is correct
+                elif self.normalizer:
+                   output = self.normalizer.denormalize_tensor(output)
                 
                 all_preds.append(output.cpu().numpy())
                 all_targets.append(target.numpy())
@@ -324,7 +361,11 @@ class Trainer:
             with torch.no_grad():
                 pred_raw = self.model(inp_tensor)
                 
-                if self.normalizer and self.config.get("standardize_outputs", False):
+                # Denormalize based on Model Contract
+                output_space = getattr(self.model, 'output_space', 'unknown')
+                if output_space == 'physical':
+                    pred_params = pred_raw.cpu().numpy()[0]
+                elif self.normalizer and self.config.get("standardize_outputs", False):
                     pred_denorm = self.normalizer.denormalize_tensor(pred_raw)
                     pred_params = pred_denorm.cpu().numpy()[0]
                 else:

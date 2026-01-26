@@ -30,6 +30,9 @@ class InverseMetalensModel(nn.Module):
             nn.Dropout(0.1),
             nn.Linear(256, output_dim) # Output: [xc, yc, fov]
         )
+        
+        # EXPLICIT CONTRACT: Model learns physical units due to loss function constraint
+        self.output_space = "physical"
 
     def forward(self, x):
         """

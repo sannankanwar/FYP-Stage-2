@@ -105,6 +105,10 @@ class FNOResNet18(nn.Module):
             xc_range=xc_range, yc_range=yc_range, S_range=S_range,
             wavelength_range=wavelength_range, focal_length_range=focal_length_range
         )
+        
+        # EXPLICIT CONTRACT: Model outputs physical units (microns)
+        # Downstream tools verify this before attempting denormalization.
+        self.output_space = "physical"
     
     def forward(self, x):
         # Adaptation

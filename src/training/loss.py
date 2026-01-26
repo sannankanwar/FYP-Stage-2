@@ -160,31 +160,20 @@ from src.inversion.forward_model import compute_hyperbolic_phase, wrap_phase, ge
 
 class Naive5ParamMSELoss(nn.Module):
     """
-    Simple MSE Loss on all 5 parameters.
-    No weighting, assumes raw or uniformly standardized inputs.
+    [DEPRECATED/REMOVED] 
+    This loss function was a trap. It compared physical predictions to normalized targets,
+    causing silent training failure.
     """
     def __init__(self, normalizer=None):
         super().__init__()
-        self.mse = nn.MSELoss()
-        self.normalizer = normalizer # used for denormalization if needed for logging only
+        raise RuntimeError(
+            "CRITICAL: Naive5ParamMSELoss has been removed for safety.\n"
+            "Reason: It causes silent training failure by comparing Physical Preds vs Normalized Targets.\n"
+            "Use 'weighted_standardized' (WeightedStandardizedLoss) instead."
+        )
 
     def forward(self, pred_params, true_params, input_images=None):
-        # input_images unused but kept for interface consistency
-        
-        # If normalizer is present, it means Trainer is standardizing targets.
-        # But for 'Naive' we assume we just minimize the difference directly.
-        
-        if self.normalizer:
-            # Depending on implementation, 'Naive' might implies on *Raw* params.
-            # But if the model outputs normalized params, calculating MSE on normalized 
-            # params is standard.
-            # Let's assume Naive means "Uniform Weighting on Normalized Data".
-            true_params_norm = self.normalizer.normalize_tensor(true_params)
-            loss = self.mse(pred_params, true_params_norm)
-        else:
-            loss = self.mse(pred_params, true_params)
-            
-        return loss, {"total_loss": loss.item()}
+        raise RuntimeError("Naive5ParamMSELoss is disabled.")
 
 
 class WeightedStandardizedLoss(nn.Module):
@@ -504,3 +493,181 @@ class BiweightRegressionLoss(nn.Module):
         loss = torch.where(mask, loss_inlier, torch.tensor(loss_outlier, device=diff.device))
         
         return loss.mean(), {"total_loss": loss.mean().item()}
+
+
+# =============================================================================
+#  EXPERIMENT 5 LOSSES (LOSS VARIANT STUDY)
+# =============================================================================
+
+class GradientConsistencyLoss(nn.Module):
+    """
+    Loss 2: Gradient Consistency Loss.
+    Penalizes differences in spatial gradients between Reconstructed and Input Phase.
+    Intention: Focus on high-frequency details (fringe spacing) which encode physical parameters.
+    """
+    def __init__(self, normalizer=None, gradient_weight=1.0):
+        super().__init__()
+        self.normalizer = normalizer
+        self.gradient_weight = gradient_weight
+        self.mse = nn.MSELoss()
+        
+        # Sobel filters for gradient computation
+        sobel_x = torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=torch.float32).view(1, 1, 3, 3)
+        sobel_y = torch.tensor([[-1, -2, -1], [0, 0, 0], [1, 2, 1]], dtype=torch.float32).view(1, 1, 3, 3)
+        self.register_buffer('sobel_x', sobel_x)
+        self.register_buffer('sobel_y', sobel_y)
+        
+    def _compute_gradient(self, img):
+        # img: (B, C, H, W) -> Grayscale for phase?
+        # Input is (Cos, Sin). Gradient of Phase is tricky if wrapped.
+        # We compute gradient of Cos and Sin components directly.
+        # img has 2 channels. We treat equal.
+        # Shape: (B, 2, H, W)
+        
+        B, C, H, W = img.shape
+        # Apply sobel to each channel independently
+        grad_x = torch.nn.functional.conv2d(img, self.sobel_x.repeat(C, 1, 1, 1), padding=1, groups=C)
+        grad_y = torch.nn.functional.conv2d(img, self.sobel_y.repeat(C, 1, 1, 1), padding=1, groups=C)
+        return grad_x, grad_y
+
+    def forward(self, pred_params, true_params, input_images):
+        """
+        Refined Logic:
+        1. Compute standard Parameter Loss (Weighted Std).
+        2. Reconstruct Phase from Pred Params.
+        3. Compute Gradient Loss between Reconstructed and Input.
+        """
+        # 1. Standard Parameter Loss (Baseline)
+        # Using simple standardized MSE for the parameter part
+        if self.normalizer:
+            pred_norm = self.normalizer.normalize_tensor(pred_params)
+            true_norm = self.normalizer.normalize_tensor(true_params)
+            loss_param = self.mse(pred_norm, true_norm)
+        else:
+            loss_param = self.mse(pred_params, true_params)
+            
+        # 2. Reconstruct Phase (Physics)
+        # Assuming pred_params are PHYSICAL (which they are from FNOResNet18)
+        B, _, H, W = input_images.shape
+        device = input_images.device
+        
+        xc, yc, S, wl, fl = pred_params[:, 0], pred_params[:, 1], pred_params[:, 2], pred_params[:, 3], pred_params[:, 4]
+        
+        # Grid Setup
+        grid_y, grid_x = torch.meshgrid(
+             torch.linspace(-0.5, 0.5, H, device=device),
+             torch.linspace(-0.5, 0.5, W, device=device),
+             indexing='ij'
+        )
+        grid_x = grid_x.unsqueeze(0).expand(B, -1, -1)
+        grid_y = grid_y.unsqueeze(0).expand(B, -1, -1)
+        
+        X_phys = xc.view(B, 1, 1) + S.view(B, 1, 1) * grid_x
+        Y_phys = yc.view(B, 1, 1) + S.view(B, 1, 1) * grid_y
+        
+        phi = compute_hyperbolic_phase(X_phys, Y_phys, fl.view(B,1,1), wl.view(B,1,1))
+        wrapped = wrap_phase(phi)
+        recon_img = get_2channel_representation(wrapped).permute(0, 3, 1, 2) # (B, 2, H, W)
+        
+        # 3. Gradient Loss
+        target_grad_x, target_grad_y = self._compute_gradient(input_images)
+        pred_grad_x, pred_grad_y = self._compute_gradient(recon_img)
+        
+        loss_grad = self.mse(pred_grad_x, target_grad_x) + self.mse(pred_grad_y, target_grad_y)
+        
+        total_loss = loss_param + self.gradient_weight * loss_grad
+        
+        return total_loss, {
+            "total_loss": total_loss.item(),
+            "loss_param": loss_param.item(),
+            "loss_grad": loss_grad.item()
+        }
+
+
+class KendallUncertaintyLoss(nn.Module):
+    """
+    Loss 3: Kendall Uncertainty Loss.
+    Learns to weigh 5 parameter losses dynamically using aleatoric uncertainty.
+    L = sum( 0.5 * exp(-si) * (y - y_hat)^2 + 0.5 * si )
+    """
+    def __init__(self, normalizer=None, init_var=0.0):
+        super().__init__()
+        self.normalizer = normalizer
+        # 5 learnable log variances
+        self.log_vars = nn.Parameter(torch.full((5,), init_var))
+        
+    def forward(self, pred_params, true_params, input_images=None):
+        if self.normalizer:
+            pred = self.normalizer.normalize_tensor(pred_params)
+            true = self.normalizer.normalize_tensor(true_params)
+        else:
+            pred = pred_params
+            true = true_params
+            
+        # Per-element squared error: (B, 5)
+        squared_diff = (pred - true) ** 2
+        
+        # Precision: (5,) broadcast to (B, 5)
+        precision = torch.exp(-self.log_vars)
+        
+        # Loss per param: 0.5 * precision * diff + 0.5 * log_vars
+        loss_element = 0.5 * precision * squared_diff + 0.5 * self.log_vars
+        
+        loss = loss_element.sum(dim=1).mean()
+        
+        return loss, {
+            "total_loss": loss.item(),
+            "sigma_xc": torch.exp(0.5 * self.log_vars[0]).item(),
+            "sigma_S": torch.exp(0.5 * self.log_vars[2]).item(),
+            "sigma_wl": torch.exp(0.5 * self.log_vars[3]).item()
+        }
+
+
+class PhysicsConsistencyLoss(nn.Module):
+    """
+    Loss 4: Physics Consistency Loss (formerly CompositePINNLoss).
+    Weighted Standardized Loss + Physics Residual (Reconstruction MSE).
+    
+    Renamed to avoid confusion with true PINN (PDE-based) constraints.
+    This strictly enforces consistency between Predicted Parameters AND Input Phase.
+    """
+    def __init__(self, normalizer=None, physics_weight=0.1):
+        super().__init__()
+        self.param_loss = WeightedStandardizedLoss(normalizer=normalizer)
+        self.physics_weight = physics_weight
+        self.mse = nn.MSELoss()
+        
+    def forward(self, pred_params, true_params, input_images):
+        # 1. Parameter Component
+        loss_param, _ = self.param_loss(pred_params, true_params)
+        
+        # 2. Physics Component (Reconstruction)
+        B, _, H, W = input_images.shape
+        device = input_images.device
+        
+        xc, yc, S, wl, fl = pred_params[:, 0], pred_params[:, 1], pred_params[:, 2], pred_params[:, 3], pred_params[:, 4]
+        
+        grid_y, grid_x = torch.meshgrid(
+             torch.linspace(-0.5, 0.5, H, device=device),
+             torch.linspace(-0.5, 0.5, W, device=device),
+             indexing='ij'
+        )
+        grid_x = grid_x.unsqueeze(0).expand(B, -1, -1)
+        grid_y = grid_y.unsqueeze(0).expand(B, -1, -1)
+        
+        X_phys = xc.view(B, 1, 1) + S.view(B, 1, 1) * grid_x
+        Y_phys = yc.view(B, 1, 1) + S.view(B, 1, 1) * grid_y
+        
+        phi = compute_hyperbolic_phase(X_phys, Y_phys, fl.view(B,1,1), wl.view(B,1,1))
+        wrapped = wrap_phase(phi)
+        recon_img = get_2channel_representation(wrapped).permute(0, 3, 1, 2)
+        
+        loss_physics = self.mse(recon_img, input_images)
+        
+        total_loss = loss_param + self.physics_weight * loss_physics
+        
+        return total_loss, {
+            "total_loss": total_loss.item(),
+            "loss_param": loss_param.item(),
+            "loss_physics": loss_physics.item()
+        }

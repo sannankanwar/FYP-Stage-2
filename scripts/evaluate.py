@@ -14,7 +14,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from src.utils.config import load_config
 from src.models.factory import get_model
 from data.loaders.simulation import generate_grid_dataset
-from src.utils.model_utils import replace_activation
+from src.utils.model_utils import replace_activation, process_predictions
 from src.utils.normalization import ParameterNormalizer
 
 def visualize_sample(input_tensor, true_params, pred_params, loss, title, output_path):
@@ -272,10 +272,8 @@ def evaluate_grid(checkpoint_path, output_dir, device="cpu", steps=25):
             
     predictions = torch.cat(predictions, dim=0) # (N_samples, 3)
     
-    # Denormalize if needed
-    if normalizer:
-        print("Denormalizing predictions...")
-        predictions = normalizer.denormalize_tensor(predictions)
+    # Process predictions (Handle Denormalization Safely)
+    predictions = process_predictions(model, predictions, normalizer, config)
     
     # Calculate Square Error per sample
     # Users usually care about spatial error (xc, yc) mostly. Let's do total parameter MSE.

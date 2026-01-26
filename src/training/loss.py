@@ -27,6 +27,9 @@ class RawPhysicsLoss(nn.Module):
         if param_weights is None:
             # xc~500, yc~500, S~20, wavelength~0.5, focal_length~50
             param_weights = [1/(500**2), 1/(500**2), 1/(20**2), 1/(0.15**2), 1/(45**2)]
+        
+        # Ensure weights are floats (handle potential string parsing from config)
+        param_weights = [float(w) for w in param_weights]
         self.register_buffer('weights', torch.tensor(param_weights, dtype=torch.float32))
     
     def forward(self, pred_params, true_params, input_images):
@@ -189,7 +192,9 @@ class WeightedStandardizedLoss(nn.Module):
         weights: list of 5 floats for [xc, yc, fov, wavelength, focal_length]
         """
         super().__init__()
-        self.weights = torch.tensor(weights)
+        # Ensure weights are floats
+        weights = [float(w) for w in weights]
+        self.weights = torch.tensor(weights, dtype=torch.float32)
         self.normalizer = normalizer
 
     def forward(self, pred_params, true_params, input_images=None):

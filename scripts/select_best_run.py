@@ -1,80 +1,90 @@
 import os
 import glob
-import pandas as pd
-import numpy as np
 import json
 import argparse
+import sys
+import datetime
 
 def analyze_experiment(exp_dir):
     """
-    Analyzes a single experiment directory.
-    Reads history.csv and returns best metrics.
+    Analyzes a single experiment directory using the 'best_metrics.json' contract.
     """
-    history_path = os.path.join(exp_dir, "history.csv")
-    if not os.path.exists(history_path):
-        print(f"Skipping {exp_dir}: No history.csv found")
+    metrics_path = os.path.join(exp_dir, "best_metrics.json")
+    
+    if not os.path.exists(metrics_path):
+        # Fallback: Check if history exists (maybe it crashed before best saves?)
+        history = os.path.join(exp_dir, "metrics", "epoch_metrics.csv")
+        # Legacy location fallback
+        legacy_hist = os.path.join(exp_dir, "history.csv")
+        
+        status = "MISSING_METRICS"
+        if os.path.exists(history) or os.path.exists(legacy_hist):
+            status = "CRASHED_OR_INCOMPLETE"
+            
+        print(f"[WARN] {os.path.basename(exp_dir)}: {status} (No best_metrics.json)")
         return None
         
     try:
-        df = pd.read_csv(history_path)
+        with open(metrics_path, 'r') as f:
+            data = json.load(f)
+            data['exp_dir'] = exp_dir
+            return data
     except Exception as e:
-        print(f"Error reading {history_path}: {e}")
+        print(f"[ERROR] {os.path.basename(exp_dir)}: MALFORMED_JSON ({e})")
         return None
-        
-    if df.empty:
-        return None
-        
-    # Find Best Epoch (Lowest Val Loss)
-    # Note: 'val_loss' in history.csv determines the best model checkpoint logic in Trainer
-    best_row = df.loc[df['val_loss'].idxmin()]
-    
-    return {
-        'exp_dir': exp_dir,
-        'best_epoch': int(best_row['epoch']),
-        'val_mse': best_row['val_loss'], # Assuming val_loss is MSE-based (it is for our losses usually, or proportional)
-        # R2 might not be in history? Trainer logs train_loss, val_loss.
-        # If R2 is missing, we rely on MSE.
-        # Trainer doesn't calculate R2 in validation loop yet explicitly for history.csv
-        # checks: Trainer._validate_epoch returns avg_val_loss.
-    }
 
 def select_best_run(suite_dir):
-    """
-    Selects best run from a suite directory containing multiple experiment folders.
-    """
+    print(f"Scanning suite directory: {os.path.abspath(suite_dir)}")
+    
+    if not os.path.exists(suite_dir):
+        print(f"[FATAL] Suite directory not found: {suite_dir}")
+        sys.exit(1)
+
     exp_dirs = glob.glob(os.path.join(suite_dir, "exp5_*"))
-    experiments = []
+    valid_experiments = []
+    
+    print(f"Found {len(exp_dirs)} candidate directories.")
     
     for d in exp_dirs:
         if os.path.isdir(d):
             stats = analyze_experiment(d)
             if stats:
-                experiments.append(stats)
+                valid_experiments.append(stats)
                 
-    if not experiments:
-        print("No valid experiments found.")
-        return None
+    if not valid_experiments:
+        print("[FATAL] No valid experiments found. Check logs for crashes.")
+        sys.exit(1)
         
-    print(f"Found {len(experiments)} experiments.")
-    
     # Sort by Val MSE (Primary)
-    # If we had R2, we would sort by R2 descending as tiebreaker.
-    sorted_exps = sorted(experiments, key=lambda x: x['val_mse'])
+    # Tiebreaker: R2 (Descending) -> but currently R2 is 0.0 placeholder.
+    # We sort by MSE Ascending.
+    sorted_exps = sorted(valid_experiments, key=lambda x: x['best_val_mse'])
     
     best = sorted_exps[0]
     
     print("\n--- Leaderboard ---")
     for i, exp in enumerate(sorted_exps):
-        print(f"{i+1}. {os.path.basename(exp['exp_dir'])} | Val MSE: {exp['val_mse']:.6f} (Epoch {exp['best_epoch']})")
+        name = os.path.basename(exp['exp_dir'])
+        print(f"{i+1}. {name:<20} | Val MSE: {exp['best_val_mse']:.6f} (Epoch {exp['best_epoch']})")
         
     print(f"\nWINNER: {os.path.basename(best['exp_dir'])}")
     
-    # Save selection
+    # Save selection atomically
     output_path = os.path.join(suite_dir, "best_run_selection.json")
-    with open(output_path, "w") as f:
-        json.dump(best, f, indent=2)
-    print(f"Selection saved to {output_path}")
+    selection_data = {
+        "winner_run_id": os.path.basename(best['exp_dir']),
+        "winner_metrics": best,
+        "candidates": sorted_exps,
+        "timestamp": datetime.datetime.now().isoformat(),
+        # "git_commit": ... (could inject if passed)
+    }
     
+    tmp_path = output_path + ".tmp"
+    with open(tmp_path, "w") as f:
+        json.dump(selection_data, f, indent=2)
+    os.rename(tmp_path, output_path)
+    
+    print(f"Selection saved to {output_path}")
     return best
 
 if __name__ == "__main__":

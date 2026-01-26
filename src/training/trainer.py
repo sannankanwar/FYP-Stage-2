@@ -182,9 +182,39 @@ class Trainer:
             # Save Checkpoint
             if self.val_loader and val_loss < self.best_val_loss:
                 self.best_val_loss = val_loss
+                self.best_epoch = epoch
                 self._save_checkpoint(epoch, val_loss, name="best_model.pth")
+                
+                # Save Best Metrics JSON (Atomic)
+                import json
+                import tempfile
+                import shutil
+                
+                metrics = {
+                    "run_id": self.config.get("experiment_name", "unknown"),
+                    "best_epoch": epoch,
+                    "best_val_mse": val_loss,
+                    "best_val_r2": 0.0, # Placeholder until implemented
+                    "schema_version": 1
+                }
+                
+                metrics_path = os.path.join(self.experiment_dir, "best_metrics.json")
+                tmp_path = metrics_path + ".tmp"
+                
+                with open(tmp_path, "w") as f:
+                    json.dump(metrics, f, indent=2)
+                os.rename(tmp_path, metrics_path)
             
             self._save_checkpoint(epoch, val_loss, name="latest_checkpoint.pth")
+            
+            # Save Epoch Metrics CSV
+            history_path = os.path.join(self.experiment_dir, "metrics", "epoch_metrics.csv")
+            os.makedirs(os.path.dirname(history_path), exist_ok=True)
+            
+            with open(history_path, "a") as f:
+                if epoch == 0:
+                     f.write("epoch,train_loss,val_loss,time\n")
+                f.write(f"{epoch+1},{train_loss},{val_loss},{epoch_time}\n")
             
             # Snapshot Logic (Every 5 Epochs)
             if (epoch + 1) % 5 == 0 and self.val_loader:

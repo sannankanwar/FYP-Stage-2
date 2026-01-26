@@ -7,7 +7,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
 from torch.utils.data import DataLoader
-from src.training.loss import Naive5ParamMSELoss, WeightedStandardizedLoss, WeightedPhysicsLoss, AuxiliaryPhysicsLoss, RawPhysicsLoss, AdaptivePhysicsLoss
+from src.training.loss import (
+    Naive5ParamMSELoss, WeightedStandardizedLoss, 
+    RobustHuberLoss, RobustLogCoshLoss, LogSpaceMSELoss, WingRegressionLoss, BiweightRegressionLoss
+)
 from src.utils.normalization import ParameterNormalizer
 from scripts.evaluate import plot_scatter
 
@@ -69,44 +72,27 @@ class Trainer:
             print("Using WeightedStandardizedLoss")
             weights = config.get("loss_weights", [1.0, 1.0, 1.0, 10.0, 10.0])
             self.criterion = WeightedStandardizedLoss(weights=weights, normalizer=self.normalizer)
-        elif loss_name == "weighted_physics":
-            print("Using WeightedPhysicsLoss")
-            weights = config.get("loss_weights", [1.0, 1.0, 1.0, 10.0, 10.0])
-            l_param = float(config.get("lambda_param", 1.0))
-            l_physics = float(config.get("lambda_physics", 0.1))
-            self.criterion = WeightedPhysicsLoss(
-                lambda_param=l_param,
-                lambda_physics=l_physics,
-                param_weights=weights,
-                normalizer=self.normalizer
-            )
-        elif loss_name == "auxiliary_physics":
-            print("Using AuxiliaryPhysicsLoss (with fringe density loss)")
-            weights = config.get("loss_weights", [1.0, 1.0, 5.0, 20.0, 20.0])
-            self.criterion = AuxiliaryPhysicsLoss(
-                lambda_param=float(config.get("lambda_param", 1.0)),
-                lambda_physics=float(config.get("lambda_physics", 0.5)),
-                lambda_fringe=float(config.get("lambda_fringe", 0.1)),
-                param_weights=weights,
-                normalizer=self.normalizer
-            )
-        elif loss_name == "raw_physics":
-            print("Using RawPhysicsLoss (for HybridScaledOutput models)")
-            l_param = float(config.get("lambda_param", 1.0))
-            l_physics = float(config.get("lambda_physics", 0.5))
-            weights = config.get("loss_weights", None)
+        elif loss_name == "huber":
+            print("Using RobustHuberLoss")
+            self.criterion = RobustHuberLoss(normalizer=self.normalizer)
+        elif loss_name == "logcosh":
+            print("Using RobustLogCoshLoss")
+            self.criterion = RobustLogCoshLoss(normalizer=self.normalizer)
+        elif loss_name == "msle":
+            print("Using LogSpaceMSELoss (MSLE)")
+            self.criterion = LogSpaceMSELoss(normalizer=self.normalizer)
+        elif loss_name == "wing":
+            print("Using WingRegressionLoss")
+            self.criterion = WingRegressionLoss(normalizer=self.normalizer)
+        elif loss_name == "biweight":
+            print("Using BiweightRegressionLoss (Tukey)")
+            self.criterion = BiweightRegressionLoss(normalizer=self.normalizer)
             
-            self.criterion = RawPhysicsLoss(
-                lambda_param=l_param,
-                lambda_physics=l_physics,
-                param_weights=weights
-            )
-        elif loss_name == "adaptive_physics":
-            print("Using AdaptivePhysicsLoss (Kendall Uncertainty)")
-            self.criterion = AdaptivePhysicsLoss(
-                lambda_param=float(config.get("lambda_param", 1.0)),
-                lambda_physics=float(config.get("lambda_physics", 0.5))
-            )
+        # Old Physics Losses (Commented out mapping to match loss.py)
+        # elif loss_name == "weighted_physics": ...
+        # elif loss_name == "auxiliary_physics": ...
+        # elif loss_name == "raw_physics": ...
+        # elif loss_name == "adaptive_physics": ...
         else:
             print(f"Using Standard MSELoss (Fallback for '{loss_name}')")
             self.criterion = nn.MSELoss()
@@ -199,9 +185,7 @@ class Trainer:
             
             # Advanced Losses handle standardization internally via self.normalizer
             # Advanced Losses handle standardization internally via self.normalizer
-            if isinstance(self.criterion, (Naive5ParamMSELoss, WeightedStandardizedLoss, WeightedPhysicsLoss, AuxiliaryPhysicsLoss, RawPhysicsLoss, AdaptivePhysicsLoss)):
-                 # These accept (pred, target, input_images)
-                 loss, details = self.criterion(output, target, data)
+            if isinstance(self.criterion, (Naive5ParamMSELoss, WeightedStandardizedLoss, RobustHuberLoss, RobustLogCoshLoss, LogSpaceMSELoss, WingRegressionLoss, BiweightRegressionLoss)):
                  # These accept (pred, target, input_images)
                  loss, details = self.criterion(output, target, data)
             else:
@@ -229,7 +213,7 @@ class Trainer:
                 data, target = data.to(self.device), target.to(self.device)
                 output = self.model(data)
                 
-                if isinstance(self.criterion, (Naive5ParamMSELoss, WeightedStandardizedLoss, WeightedPhysicsLoss, AuxiliaryPhysicsLoss, RawPhysicsLoss, AdaptivePhysicsLoss)):
+                if isinstance(self.criterion, (Naive5ParamMSELoss, WeightedStandardizedLoss, RobustHuberLoss, RobustLogCoshLoss, LogSpaceMSELoss, WingRegressionLoss, BiweightRegressionLoss)):
                      loss, _ = self.criterion(output, target, data)
                      loss, _ = self.criterion(output, target, data)
                 else:

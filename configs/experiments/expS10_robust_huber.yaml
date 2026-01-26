@@ -1,0 +1,23 @@
+experiment_name: "expS10_robust_huber"
+description: "Robust Huber Loss (Standardized). Combines MSE near zero and L1 for outliers."
+# Training
+epochs: 100
+batch_size: 32
+learning_rate: 0.001
+optimizer: "adam"
+scheduler: "plateau"
+# Model
+model:
+  name: "fno_resnet18"
+  resolution: 1024
+  input_channels: 2
+  output_dim: 5
+  modes: 32
+# Data & Loss
+standardize_outputs: true 
+loss_function: "huber" 
+grid_strategy: "random_all"
+# Parameter ranges
+S_range: [1.0, 40.0]
+wavelength_range: [0.4, 0.7]
+focal_length_range: [10.0, 100.0]

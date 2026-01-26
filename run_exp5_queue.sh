@@ -4,8 +4,18 @@
 # Handles directory resolution, error checking, automated aggregation, and scheduler policy.
 
 set -u
-# NOTE: Removed 'set -e' to allow continue-on-failure
-# We will check return codes manually.
+
+# 0. Python Auto-Detection
+if command -v python &> /dev/null; then
+    PYTHON_CMD="python"
+elif command -v python3 &> /dev/null; then
+    PYTHON_CMD="python3"
+else
+    echo "❌ [Fatal] Check failed: No 'python' or 'python3' found."
+    exit 127
+fi
+
+echo "Using Python: $PYTHON_CMD ($(which $PYTHON_CMD))"
 
 # 1. Resolve Root Directory (independent of where script is called)
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -51,8 +61,8 @@ run_experiment() {
     echo "[Queue] Starting ${run_id} using ${config_name}..."
     echo "        Log: ${log_file}"
     
-    # Use standard flags including --run-dir which triggers flat structure
-    nohup python -m src.main \
+    # Use Detected Python
+    nohup $PYTHON_CMD -m src.main \
         --config "${config_path}" \
         --epochs 100 \
         --seed 42 \
@@ -102,14 +112,12 @@ if [ $FAILED_RUNS -eq $TOTAL_RUNS ]; then
     exit 1
 fi
 
-python scripts/select_best_run.py --suite_dir "${OUTPUT_DIR}" > "${AGG_LOG}" 2>&1
+$PYTHON_CMD scripts/select_best_run.py --suite_dir "${OUTPUT_DIR}" > "${AGG_LOG}" 2>&1
 AGG_EXIT=$?
 
 if [ $AGG_EXIT -ne 0 ]; then
     echo "❌ Aggregation Failed. See ${AGG_LOG}"
     cat "${AGG_LOG}"
-    # Continue? user policy says "aggregate results from all successful runs".
-    # If script failed, maybe no valid runs found even if we thought so.
     exit 1
 fi
 
@@ -122,7 +130,7 @@ echo "🚀 Phase 2: Extension Run"
 echo "========================================================"
 
 # Read Winner from JSON (Robust Python One-Liner)
-WINNER_ID=$(python -c "import json; print(json.load(open('${OUTPUT_DIR}/best_run_selection.json'))['winner_run_id'])")
+WINNER_ID=$($PYTHON_CMD -c "import json; print(json.load(open('${OUTPUT_DIR}/best_run_selection.json'))['winner_run_id'])")
 echo "🏆 Winner ID: ${WINNER_ID}"
 
 # Map Winner ID to Config (Robust Mapping)
@@ -138,7 +146,7 @@ EXT_LOG="${OUTPUT_DIR}/${WINNER_ID}_ext.log"
 echo "Extending ${WINNER_ID} to 350 epochs..."
 echo "Resume: ${RESUME_CKPT}"
 
-nohup python -m src.main \
+nohup $PYTHON_CMD -m src.main \
     --config "${EXT_CONFIG}" \
     --epochs 350 \
     --seed 42 \

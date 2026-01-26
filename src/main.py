@@ -67,6 +67,9 @@ def main():
         full_config['output_dir'] = args.output_dir
     elif args.run_dir: # Alias support
         full_config['output_dir'] = args.run_dir
+        # Fix: If run-dir is specified, we assume it IS the specific experiment folder.
+        # Don't create nested {run_dir}/{experiment_name}
+        full_config['flat_output_structure'] = True
         
     if args.epochs:
         print(f"CLI Override: Epochs {full_config.get('epochs')} -> {args.epochs}")

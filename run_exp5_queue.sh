@@ -1,9 +1,11 @@
 #!/bin/bash
 # run_exp5_queue.sh
 # Robust, sequential runner for Experiment Suite 5.
-# Handles directory resolution, error checking, and automated aggregation.
+# Handles directory resolution, error checking, automated aggregation, and scheduler policy.
 
-set -euo pipefail
+set -u
+# NOTE: Removed 'set -e' to allow continue-on-failure
+# We will check return codes manually.
 
 # 1. Resolve Root Directory (independent of where script is called)
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -15,10 +17,29 @@ EXPERIMENT_DIR="configs/experiments_5_loss_study"
 OUTPUT_DIR="outputs_exp5"
 mkdir -p "${OUTPUT_DIR}"
 
+SUMMARY_JSON="${OUTPUT_DIR}/queue_summary.json"
+echo "[" > "${SUMMARY_JSON}" # Init JSON array
+
 # 3. Experiments
 echo "========================================================"
 echo "🚀 Starting Experiment Suite 5 (Sequential Queue)"
 echo "========================================================"
+
+FAILED_RUNS=0
+TOTAL_RUNS=4
+RUN_COUNT=0
+
+append_summary() {
+    local run_id=$1
+    local status=$2
+    local reason=$3
+    
+    # Comma if not first
+    if [ "$RUN_COUNT" -gt 0 ]; then echo "," >> "${SUMMARY_JSON}"; fi
+    
+    echo "  { \"run_id\": \"$run_id\", \"status\": \"$status\", \"reason\": \"$reason\" }" >> "${SUMMARY_JSON}"
+    RUN_COUNT=$((RUN_COUNT + 1))
+}
 
 run_experiment() {
     local config_name=$1
@@ -30,8 +51,7 @@ run_experiment() {
     echo "[Queue] Starting ${run_id} using ${config_name}..."
     echo "        Log: ${log_file}"
     
-    # Run in background to decouple, but wait immediately
-    # We use python -m src.main
+    # Use standard flags including --run-dir which triggers flat structure
     nohup python -m src.main \
         --config "${config_path}" \
         --epochs 100 \
@@ -41,35 +61,57 @@ run_experiment() {
         
     local pid=$!
     wait $pid
+    local exit_code=$?
+    
+    if [ $exit_code -ne 0 ]; then
+        echo "❌ [Failure] ${run_id} crashed with exit code ${exit_code}."
+        append_summary "${run_id}" "FAILURE" "Crash (Exit ${exit_code})"
+        FAILED_RUNS=$((FAILED_RUNS + 1))
+        return 1
+    fi
     
     # Check if run produced the best_metrics.json (Success Contract)
     if [ ! -f "${run_dir}/best_metrics.json" ]; then
         echo "❌ [Failure] ${run_id} did not produce best_metrics.json."
         echo "   Check log: ${log_file}"
-        # We fail fast? Or continue? Prompt said "fail immediately... unless configured"
-        # We will fail fast to prevent wasting time on broken pipeline.
-        exit 1
+        append_summary "${run_id}" "FAILURE" "Missing best_metrics.json"
+        FAILED_RUNS=$((FAILED_RUNS + 1))
+        return 1
     else
         echo "✅ [Success] ${run_id} completed."
+        append_summary "${run_id}" "SUCCESS" "Complete"
+        return 0
     fi
 }
 
-# Run 4 Experiments Sequentially (Safer than parallel for debugging)
 run_experiment "exp5_1_unitstd.yaml" "exp5_1"
 run_experiment "exp5_2_gradflow.yaml" "exp5_2"
 run_experiment "exp5_3_kendall.yaml" "exp5_3"
 run_experiment "exp5_4_pinn.yaml" "exp5_4"
+
+echo "]" >> "${SUMMARY_JSON}" # Close array
 
 echo "========================================================"
 echo "📊 Running Aggregator (Phase 1 Analysis)"
 echo "========================================================"
 
 AGG_LOG="${OUTPUT_DIR}/aggregation.log"
-python scripts/select_best_run.py --suite_dir "${OUTPUT_DIR}" > "${AGG_LOG}" 2>&1 || {
+
+if [ $FAILED_RUNS -eq $TOTAL_RUNS ]; then
+    echo "❌ All experiments failed. Aborting aggregation."
+    exit 1
+fi
+
+python scripts/select_best_run.py --suite_dir "${OUTPUT_DIR}" > "${AGG_LOG}" 2>&1
+AGG_EXIT=$?
+
+if [ $AGG_EXIT -ne 0 ]; then
     echo "❌ Aggregation Failed. See ${AGG_LOG}"
     cat "${AGG_LOG}"
+    # Continue? user policy says "aggregate results from all successful runs".
+    # If script failed, maybe no valid runs found even if we thought so.
     exit 1
-}
+fi
 
 echo "✅ Aggregation Complete."
 cat "${AGG_LOG}"
@@ -114,7 +156,8 @@ fi
 
 echo "========================================================"
 echo "🎉 Benchmark Suite Complete."
+echo "   Summary: ${SUMMARY_JSON}"
 echo "   Selection: ${OUTPUT_DIR}/best_run_selection.json"
 echo "   Winner: ${WINNER_ID}"
-echo "   Tail logs: tail -f ${OUTPUT_DIR}/*.log"
+echo "   Failed Runs: ${FAILED_RUNS}"
 echo "========================================================"

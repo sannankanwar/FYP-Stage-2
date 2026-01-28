@@ -14,8 +14,37 @@ notify() {
 
 timestamp() {
     date "+%Y-%m-%d_%H-%M-%S"
+# ==============================================================================
+# 0. Environment Check & Auto-Activation
+# ==============================================================================
+
+check_torch() {
+    python -c "import torch" 2>/dev/null
 }
 
+if ! check_torch; then
+    echo "['torch' not found. Attempting auto-activation...]"
+    if [ -f ".venv/bin/activate" ]; then
+        source .venv/bin/activate
+    elif [ -f "venv/bin/activate" ]; then
+        source venv/bin/activate
+    fi
+    
+    if ! check_torch; then
+        echo "ERROR: Virtual Environment not detected or torch missing."
+        echo "Please activate venv before running this script."
+        exit 1
+    fi
+    echo "[Virtual environment activated]"
+fi
+
+# Log Environment Info
+echo "Python Path: $(which python)"
+echo "Python Version: $(python --version)"
+
+# ==============================================================================
+# 1. Run Pre-flight Checks
+# ==============================================================================
 # 1. Run Pre-flight Checks
 echo "Running Pre-flight Tests..."
 if ! bash "$SCRIPT_DIR/run_all_tests.sh"; then

@@ -9,6 +9,36 @@ GREEN='\033[0;32m'
 RED='\033[0;31m'
 NC='\033[0m'
 
+# ==============================================================================
+# 0. Environment Check & Auto-Activation
+# ==============================================================================
+
+check_torch() {
+    python -c "import torch" 2>/dev/null
+}
+
+if ! check_torch; then
+    echo -e "${RED}[INFO] 'torch' not found in current python environment.${NC}"
+    echo "Attempting to activate virtual environment..."
+    
+    if [ -f ".venv/bin/activate" ]; then
+        source .venv/bin/activate
+    elif [ -f "venv/bin/activate" ]; then
+        source venv/bin/activate
+    fi
+    
+    # Re-check
+    if ! check_torch; then
+        echo -e "${RED}[ERROR] Virtual Environment missing or 'torch' not installed.${NC}"
+        echo -e "Please run: ${GREEN}source .venv/bin/activate${NC} (or create venv with uv/pip)"
+        echo -e "Current Python: $(which python)"
+        exit 1
+    else
+        echo -e "${GREEN}[OK] Virtual environment activated.${NC}"
+    fi
+fi
+
+
 echo -e "${GREEN}=== Starting Validation & Test Suite ===${NC}"
 
 # 1. Config Validation Check

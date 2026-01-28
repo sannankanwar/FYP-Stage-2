@@ -1,0 +1,85 @@
+data:
+  S_range:
+  - 5.0
+  - 50.0
+  focal_length_range:
+  - 10.0
+  - 100.0
+  resolution: 1024
+  simulation:
+    apply_noise: false
+    image_size:
+    - 1024
+    - 1024
+    params:
+    - xc
+    - yc
+    - S
+    - f
+    - lambda
+  train_samples: 4000
+  val_samples: 400
+  wavelength_range:
+  - 0.4
+  - 0.7
+  xc_range:
+  - -100.0
+  - 100.0
+  yc_range:
+  - -100.0
+  - 100.0
+loss:
+  mode: unit_standardized
+  physics_enabled: true
+  physics_start_epoch: 5
+  physics_weight: 0.1
+  predicted_params:
+  - xc
+  - yc
+  - S
+  - f
+  - lambda
+meta:
+  description: 'Baseline: Unit Standardized + Physics Loss, No Noise'
+  name: exp_noisy_04_baseline_pinn
+  version: '1.0'
+model:
+  fno_activation: gelu
+  fno_norm: instance
+  input_channels: 2
+  name: fno_resnet18
+  output_dim: 5
+noise:
+  coordinate_warp:
+    enabled: false
+  dead_pixels:
+    density: 0.0004
+    enabled: true
+    phase_value_mode: random
+    region_type: pixels
+  enabled: false
+  fabrication_grf:
+    enabled: false
+  pipeline_order:
+  - sensor_grain
+  - dead_pixels
+  - wrap_phase
+  seed: 42
+  sensor_grain:
+    enabled: true
+    noise_type: gaussian
+    spatially_correlated: false
+    std_rad: 0.2
+  structured_sinusoid:
+    enabled: false
+  wrap_phase:
+    enabled: true
+training:
+  batch_size: 16
+  epochs: 50
+  experiment_name: exp_noisy_04_baseline_pinn
+  learning_rate: 0.0001
+  log_interval: 10
+  optimizer: adamw
+  output_dir: outputs/noise_matrix
+  scheduler: plateau

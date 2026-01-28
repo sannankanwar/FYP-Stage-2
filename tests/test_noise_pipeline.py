@@ -33,7 +33,9 @@ def test_noise_randomness():
     p1 = NoisePipeline(cfg1)
     p2 = NoisePipeline(cfg2)
     
-    phi = torch.zeros(1, 32, 32)
+    # Use random input so coordinate warp (which moves pixels) creates actual differences.
+    # Warping a flat zero image always results in a flat zero image!
+    phi = torch.randn(1, 32, 32)
     out1, _, _ = p1.apply(phi)
     out2, _, _ = p2.apply(phi)
     

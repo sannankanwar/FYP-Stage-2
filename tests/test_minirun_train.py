@@ -32,7 +32,7 @@ def test_mini_training_loop():
     # 2. Setup Loss
     ranges = {"xc":(-1,1),"yc":(-1,1),"S":(-1,1),"f":(-1,1),"lambda":(-1,1)}
     reg_loss = UnitStandardizedParamLoss(["xc","yc","S","f","lambda"], ranges)
-    loss_fn = CompositeLoss(reg_loss)
+    loss_fn = CompositeLoss(reg_loss).to(device)
     
     # 3. Loop
     for i in range(5):

@@ -45,7 +45,10 @@ def test_gradflow_loss_math(dummy_ranges):
     assert torch.isclose(loss, torch.tensor(1.25))
 
 def test_physics_scheduling_gate(dummy_ranges):
-    reg_loss = UnitStandardizedParamLoss(["xc"], dummy_ranges)
+    # Physics loss requires ALL parameters to reconstruct the phase map
+    # We must provide ranges and inputs for all 5 params: xc, yc, S, f, lambda
+    all_params = ["xc", "yc", "S", "f", "lambda"]
+    reg_loss = UnitStandardizedParamLoss(all_params, dummy_ranges)
     
     # Physics weight 1.0, start epoch 10
     comp_loss = CompositeLoss(
@@ -53,13 +56,19 @@ def test_physics_scheduling_gate(dummy_ranges):
         physics_enabled=True,
         physics_weight=1.0,
         physics_start_epoch=10,
-        predicted_params=["xc"]
+        predicted_params=all_params
     )
     
     # Create inputs
     B = 1
-    pred_params = torch.zeros(B, 1) # xc=0 (physically valid in range)
-    true_params = torch.zeros(B, 1)
+    # 5 params: xc, yc, s, f, lambda
+    pred_params = torch.zeros(B, 5) 
+    # Set reasonable defaults so forward model doesn't explode (e.g. S=1, f=10, lambda=0.5)
+    pred_params[:, 2] = 1.0   # S
+    pred_params[:, 3] = 10.0  # f
+    pred_params[:, 4] = 0.5   # lambda (normalized? assumes physical here for simplicity or unit-std handles it)
+    
+    true_params = torch.zeros(B, 5)
     # Mock input images with mismatch to ensure physics loss would be non-zero
     input_images = torch.ones(B, 2, 32, 32) 
     
@@ -69,8 +78,10 @@ def test_physics_scheduling_gate(dummy_ranges):
     assert m_early.get("loss_physics") is None
     
     # After Gate
+    # Note: Lambda is in pred_params (index 4), so we don't strictly need it in batch, 
+    # but build_full_params handles that priority.
     loss_late, m_late = comp_loss(pred_params, true_params, input_images, 
-                                  batch={"lambda_m": torch.tensor([0.5e-6])}, # Needed for recon
+                                  batch={}, 
                                   epoch=11)
     assert m_late["physics_active"] is True
     assert "loss_physics" in m_late

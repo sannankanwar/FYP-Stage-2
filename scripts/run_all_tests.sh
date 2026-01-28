@@ -11,20 +11,30 @@ NC='\033[0m'
 
 echo -e "${GREEN}=== Starting Validation & Test Suite ===${NC}"
 
-# 1. Config Validation Check (on defaults or a reference config)
-# Find a config to validate. Prioritize experiment config if provided arg, else defaults.
-if [ -z "$1" ]; then
-    CONFIG_TO_TEST="configs/training.yaml"
-    if [ ! -f "$CONFIG_TO_TEST" ]; then
-        # Fallback to any yaml in configs
-        CONFIG_TO_TEST=$(find configs -name "*.yaml" | head -n 1)
+# 1. Config Validation Check
+# Find a config to validate. Prioritize experiment configs.
+if [ -z "${1:-}" ]; then
+    # Try finding an experiment config first
+    CONFIG_TO_TEST=$(find configs/experiments -name "*.yaml" 2>/dev/null | head -n 1)
+    
+    # If not found, try recursive from configs/ but avoid partials
+    if [ -z "$CONFIG_TO_TEST" ]; then
+        CONFIG_TO_TEST=$(find configs -name "*.yaml" | grep -v "training.yaml" | grep -v "model.yaml" | grep -v "data.yaml" | head -n 1)
+    fi
+    
+    # If still nothing, warn and skip (or fail)
+    if [ -z "$CONFIG_TO_TEST" ]; then
+        echo -e "${RED}[WARN] No valid experiment config found to test. Skipping static validation.${NC}"
+        CONFIG_TO_TEST=""
     fi
 else
     CONFIG_TO_TEST="$1"
 fi
 
-echo "Running Static Config Validation on: $CONFIG_TO_TEST"
-python scripts/validate_config.py "$CONFIG_TO_TEST"
+if [ -n "$CONFIG_TO_TEST" ]; then
+    echo "Running Static Config Validation on: $CONFIG_TO_TEST"
+    python scripts/validate_config.py "$CONFIG_TO_TEST"
+fi
 
 # 2. Pytest Suite
 echo -e "\n${GREEN}=== Running Unit Tests ===${NC}"

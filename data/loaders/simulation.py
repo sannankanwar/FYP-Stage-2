@@ -5,8 +5,14 @@ import torch
 from src.inversion.forward_model import (
     compute_hyperbolic_phase, 
     wrap_phase, 
-    get_2channel_representation
+    get_2channel_representation,
+    wrap_phase
 )
+try:
+    from src.noise.noise_pipeline import NoisePipeline
+    NOISE_PIPELINE_AVAILABLE = True
+except ImportError:
+    NOISE_PIPELINE_AVAILABLE = False
 
 """
 Inverse Metalens CNN Regressor - Data Generation
@@ -243,7 +249,22 @@ class OnTheFlyDataset(Dataset):
         self.S_range = tuple(config.get("S_range", [1.0, 40.0]))
         self.wavelength_range = tuple(config.get("wavelength_range", [0.4, 0.7]))
         self.focal_length_range = tuple(config.get("focal_length_range", [10.0, 100.0]))
+        self.focal_length_range = tuple(config.get("focal_length_range", [10.0, 100.0]))
         self.noise_std = config.get("noise_std", 0.0)
+        
+        # Initialize Noise Pipeline if enabled
+        # Check both simulation.apply_noise AND noise.enabled
+        sim_cfg = config.get("simulation", {}) if isinstance(config.get("simulation"), dict) else {}
+        apply_noise = sim_cfg.get("apply_noise", False) or config.get("apply_noise", False) # Fallback
+        noise_cfg = config.get("noise", {})
+        
+        self.pipeline = None
+        if apply_noise and noise_cfg.get("enabled", False):
+            if NOISE_PIPELINE_AVAILABLE:
+                print(f"Dataset: Initializing NoisePipeline with order {noise_cfg.get('pipeline_order')}")
+                self.pipeline = NoisePipeline(noise_cfg)
+            else:
+                print("WARNING: Noise enabled in config but src.noise.noise_pipeline not found.")
         
     def __len__(self):
         return self.length
@@ -266,6 +287,30 @@ class OnTheFlyDataset(Dataset):
             noise_std=self.noise_std
         )
         
+        )
+        
+        # Apply Noise Pipeline if enabled
+        if self.pipeline:
+             # Recover phase from 2-channel input (H, W, 2)
+             # inp[..., 0] is cos, inp[..., 1] is sin
+             phi = np.arctan2(inp[..., 1], inp[..., 0]) # (H, W)
+             
+             # Convert to torch tensor (B, H, W) -> (1, H, W)
+             phi_tensor = torch.from_numpy(phi).unsqueeze(0)
+             
+             # Apply pipeline (returns 1, H, W)
+             # Using a fixed seed-per-sample would require passing seed to pipeline, 
+             # but pipeline handles seeding via config or state. 
+             # For training, we usually want stochastic (seed=None in forward).
+             phi_noisy, _ = self.pipeline(phi_tensor)
+             
+             # Convert back to 2-channel (H, W, 2)
+             # phi_noisy is (1, H, W)
+             # get_2channel_representation expects (..., H, W) or (H, W)
+             # output is (..., H, W, 2)
+             inp_noisy = get_2channel_representation(phi_noisy.squeeze(0))
+             inp = inp_noisy.numpy()
+
         # inp is (H, W, 2), convert to (2, H, W) for PyTorch
         inp = np.transpose(inp, (2, 0, 1))
         

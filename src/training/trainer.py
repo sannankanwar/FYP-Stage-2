@@ -7,10 +7,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
 from torch.utils.data import DataLoader
-from src.training.loss import (
-    Naive5ParamMSELoss, WeightedStandardizedLoss, 
-    RobustHuberLoss, RobustLogCoshLoss, LogSpaceMSELoss, WingRegressionLoss, BiweightRegressionLoss
-)
+from torch.utils.data import DataLoader
+from src.training.loss import build_loss, CompositeLoss
 from src.utils.normalization import ParameterNormalizer
 from scripts.evaluate import plot_scatter
 
@@ -40,65 +38,19 @@ class Trainer:
             }
             self.normalizer = ParameterNormalizer(ranges)
 
-        # Setup Loss Function (MOVED BEFORE OPTIMIZER)
-        loss_name = config.get("loss_function", "mse")
+        # Setup Loss Function via Factory
+        # This supports the standardized config schema (loss: { ... })
+        loss_cfg = config.get("loss", {})
+        data_cfg = config.get("data", {})
         
-        # Imports specific to new losses (if needed, but they are in the same file)
-        from src.training.loss import (
-            GradientConsistencyLoss, KendallUncertaintyLoss, PhysicsConsistencyLoss
-        )
-        
-        if loss_name == "naive_5param":
-            raise RuntimeError(
-                "Naive5ParamMSELoss is deprecated and unsafe. "
-                "It mixes physical and normalized spaces and is permanently disabled."
-            )
-        elif loss_name == "weighted_standardized":
-            print("Using WeightedStandardizedLoss")
-            weights = config.get("loss_weights", [1.0, 1.0, 1.0, 10.0, 10.0])
-            self.criterion = WeightedStandardizedLoss(weights=weights, normalizer=self.normalizer)
-        elif loss_name == "gradient_consistency": # Loss 2
-            print("Using GradientConsistencyLoss")
-            weight = float(config.get("gradient_weight", 1.0))
-            self.criterion = GradientConsistencyLoss(normalizer=self.normalizer, gradient_weight=weight)
-        elif loss_name == "kendall": # Loss 3
-            print("Using KendallUncertaintyLoss")
-            init_var = float(config.get("init_log_var", 0.0))
-            self.criterion = KendallUncertaintyLoss(normalizer=self.normalizer, init_var=init_var)
-        elif loss_name == "pinn": # Deprecated Key
-             raise ValueError(
-                "The loss key 'pinn' is deprecated. Use 'physics_consistency' instead. "
-                "The class has been renamed to PhysicsConsistencyLoss to reflect its true nature."
-             )
-        elif loss_name == "physics_consistency": # Loss 4
-            print("Using PhysicsConsistencyLoss")
-            weight = float(config.get("physics_weight", 0.1)) # Renamed param
-            # Fallback for old configs if needed? User said "Do not change training behavior". 
-            # If I error on 'pinn', I must update the config file.
-            # I will expect config update.
-            self.criterion = PhysicsConsistencyLoss(normalizer=self.normalizer, physics_weight=weight)
-        elif loss_name == "huber":
-            print("Using RobustHuberLoss")
-            self.criterion = RobustHuberLoss(normalizer=self.normalizer)
-        elif loss_name == "logcosh":
-            print("Using RobustLogCoshLoss")
-            self.criterion = RobustLogCoshLoss(normalizer=self.normalizer)
-        elif loss_name == "msle":
-            print("Using LogSpaceMSELoss (MSLE)")
-            self.criterion = LogSpaceMSELoss(normalizer=self.normalizer)
-        elif loss_name == "wing":
-            print("Using WingRegressionLoss")
-            self.criterion = WingRegressionLoss(normalizer=self.normalizer)
-        elif loss_name == "biweight":
-            print("Using BiweightRegressionLoss (Tukey)")
-            self.criterion = BiweightRegressionLoss(normalizer=self.normalizer)
-        else:
-            print(f"Using Standard MSELoss (Fallback for '{loss_name}')")
-            self.criterion = nn.MSELoss()
+        # If legacy flattened config is passed, try to adapt (optional, but good for safety)
+        if not loss_cfg and "loss_function" in config:
+            print("WARNING: Detecting legacy config format. Attempting to adapt...")
+            loss_cfg = {"mode": "unit_standardized"} # Fallback
             
-        # Move criterion to device (important for losses with buffers/params)
-        if isinstance(self.criterion, nn.Module):
-            self.criterion = self.criterion.to(self.device)
+        print("Building Loss Module...")
+        self.criterion = build_loss(loss_cfg, data_cfg)
+        self.criterion = self.criterion.to(self.device)
 
         # Setup Optimizer (AFTER LOSS so we can include loss params)
         lr = float(config.get("learning_rate", 1e-3))
@@ -241,26 +193,26 @@ class Trainer:
             self.optimizer.zero_grad()
             output = self.model(data)
             
-            # Advanced Losses handle standardization internally via self.normalizer
-            # Advanced Losses handle standardization internally via self.normalizer
-            from src.training.loss import (
-                GradientConsistencyLoss, KendallUncertaintyLoss, PhysicsConsistencyLoss
+            # Using CompositeLoss interface which handles everything
+            # Passing epoch for physics scheduling
+            # Passing data (images) for physics loss
+            loss, metrics = self.criterion(
+                pred_params=output, 
+                true_params=target, 
+                input_images=data,
+                epoch=epoch
             )
-            if isinstance(self.criterion, (Naive5ParamMSELoss, WeightedStandardizedLoss, RobustHuberLoss, RobustLogCoshLoss, LogSpaceMSELoss, WingRegressionLoss, BiweightRegressionLoss, GradientConsistencyLoss, KendallUncertaintyLoss, PhysicsConsistencyLoss)):
-                 # These accept (pred, target, input_images)
-                 loss, details = self.criterion(output, target, data)
-            else:
-                # Fallback for standard MSE, need manual normalization if not handled
-                current_target = target
-                if self.normalizer:
-                    current_target = self.normalizer.normalize_tensor(target)
-                loss = self.criterion(output, current_target)
                 
             loss.backward()
             self.optimizer.step()
             
             total_loss += loss.item()
-            progress_bar.set_postfix({'loss': loss.item()})
+            
+            # Update progress bar with key metrics
+            postfix = {'loss': f"{loss.item():.4f}"}
+            if "loss_physics" in metrics:
+                postfix["phys"] = f"{metrics['loss_physics']:.4f}"
+            progress_bar.set_postfix(postfix)
             
         return total_loss / num_batches
 
@@ -274,17 +226,12 @@ class Trainer:
                 data, target = data.to(self.device), target.to(self.device)
                 output = self.model(data)
                 
-                from src.training.loss import (
-                    GradientConsistencyLoss, KendallUncertaintyLoss, PhysicsConsistencyLoss
+                loss, metrics = self.criterion(
+                    pred_params=output, 
+                    true_params=target, 
+                    input_images=data,
+                    epoch=epoch
                 )
-                if isinstance(self.criterion, (Naive5ParamMSELoss, WeightedStandardizedLoss, RobustHuberLoss, RobustLogCoshLoss, LogSpaceMSELoss, WingRegressionLoss, BiweightRegressionLoss, GradientConsistencyLoss, KendallUncertaintyLoss, PhysicsConsistencyLoss)):
-                     loss, _ = self.criterion(output, target, data)
-                     loss, _ = self.criterion(output, target, data)
-                else:
-                    current_target = target
-                    if self.normalizer:
-                        current_target = self.normalizer.normalize_tensor(target)
-                    loss = self.criterion(output, current_target)
                 
                 total_loss += loss.item()
                 

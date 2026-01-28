@@ -14,10 +14,15 @@ echo -e "${GREEN}=== Starting Validation & Test Suite ===${NC}"
 # 1. Config Validation Check
 # Find a config to validate. Prioritize experiment configs.
 if [ -z "${1:-}" ]; then
-    # Try finding an experiment config first
-    CONFIG_TO_TEST=$(find configs/experiments -name "*.yaml" 2>/dev/null | head -n 1)
+    # STRATEGY: Prioritize known-good subdirectories like 'noise_matrix'
+    CONFIG_TO_TEST=$(find configs/experiments/noise_matrix -name "*.yaml" 2>/dev/null | head -n 1)
     
-    # If not found, try recursive from configs/ but avoid partials
+    # Fallback to general experiments if noise_matrix is empty
+    if [ -z "$CONFIG_TO_TEST" ]; then
+        CONFIG_TO_TEST=$(find configs/experiments -name "*.yaml" 2>/dev/null | head -n 1)
+    fi
+    
+    # Fallback only to root configs that are NOT partials
     if [ -z "$CONFIG_TO_TEST" ]; then
         CONFIG_TO_TEST=$(find configs -name "*.yaml" | grep -v "training.yaml" | grep -v "model.yaml" | grep -v "data.yaml" | head -n 1)
     fi

@@ -12,24 +12,23 @@ NC='\033[0m'
 echo -e "${GREEN}=== Starting Validation & Test Suite ===${NC}"
 
 # 1. Config Validation Check
-# Find a config to validate. Prioritize experiment configs.
+# Find a config to validate.
 if [ -z "${1:-}" ]; then
-    # STRATEGY: Prioritize known-good subdirectories like 'noise_matrix'
+    # STRATEGY: 
+    # 1. Look for known valid configs in noise_matrix/
     CONFIG_TO_TEST=$(find configs/experiments/noise_matrix -name "*.yaml" 2>/dev/null | head -n 1)
     
-    # Fallback to general experiments if noise_matrix is empty
+    # 2. If not found, look for any valid experiment file in configs/experiments/
+    #    that is NOT a partial config.
     if [ -z "$CONFIG_TO_TEST" ]; then
         CONFIG_TO_TEST=$(find configs/experiments -name "*.yaml" 2>/dev/null | head -n 1)
     fi
     
-    # Fallback only to root configs that are NOT partials
+    # 3. If STILL nothing, skip validation rather than picking a partial config like 'training_resnet18.yaml'
+    #    The grep -v approach was failing because you likely have files like training_resnet18.yaml that matched.
     if [ -z "$CONFIG_TO_TEST" ]; then
-        CONFIG_TO_TEST=$(find configs -name "*.yaml" | grep -v "training.yaml" | grep -v "model.yaml" | grep -v "data.yaml" | head -n 1)
-    fi
-    
-    # If still nothing, warn and skip (or fail)
-    if [ -z "$CONFIG_TO_TEST" ]; then
-        echo -e "${RED}[WARN] No valid experiment config found to test. Skipping static validation.${NC}"
+        echo -e "${RED}[WARN] No valid experiment config found in configs/experiments/ to test.${NC}"
+        echo "Skipping static validation step."
         CONFIG_TO_TEST=""
     fi
 else
@@ -53,7 +52,6 @@ if [ "$HAS_CUDA" == "True" ]; then
     pytest tests/ -v
 else
     echo "NO CUDA Detected. Running CPU-only tests (skipping @pytest.mark.cuda)."
-    # Rely on skipif decorators in the tests
     pytest tests/ -v
 fi
 

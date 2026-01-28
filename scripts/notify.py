@@ -106,5 +106,120 @@ def main():
         except Exception as e:
             print(f"Fallback failed: {e}", file=sys.stderr)
 
+            print(f"Fallback failed: {e}", file=sys.stderr)
+
+def send_telegram_photo(token, chat_id, photo_path, caption=None):
+    """
+    Send a photo via Telegram Bot API using multipart/form-data.
+    """
+    url = f"https://api.telegram.org/bot{token}/sendPhoto"
+    
+    # We need to construct a multipart/form-data request manually or use a library.
+    # Standard library 'urllib' + 'email' or manual boundary construction.
+    # Manual construction is robust enough for simple file uploads.
+    
+    boundary = '---boundaryString123456789'
+    data = []
+    
+    # Chat ID
+    data.append(f'--{boundary}'.encode('utf-8'))
+    data.append(f'Content-Disposition: form-data; name="chat_id"'.encode('utf-8'))
+    data.append(b'')
+    data.append(str(chat_id).encode('utf-8'))
+    
+    # Caption
+    if caption:
+        data.append(f'--{boundary}'.encode('utf-8'))
+        data.append(f'Content-Disposition: form-data; name="caption"'.encode('utf-8'))
+        data.append(b'')
+        data.append(caption.encode('utf-8'))
+    
+    # File
+    filename = os.path.basename(photo_path)
+    with open(photo_path, 'rb') as f:
+        file_content = f.read()
+        
+    data.append(f'--{boundary}'.encode('utf-8'))
+    data.append(f'Content-Disposition: form-data; name="photo"; filename="{filename}"'.encode('utf-8'))
+    data.append(b'Content-Type: image/png') # Assuming png/jpg
+    data.append(b'')
+    data.append(file_content)
+    
+    # End
+    data.append(f'--{boundary}--'.encode('utf-8'))
+    data.append(b'')
+    
+    # Join with CRLF
+    body = b'\r\n'.join(data)
+    
+    headers = {
+        'Content-Type': f'multipart/form-data; boundary={boundary}',
+        'Content-Length': len(body)
+    }
+    
+    req = urllib.request.Request(url, data=body, headers=headers)
+    
+    try:
+        with urllib.request.urlopen(req, timeout=30) as response:
+            return response.status == 200
+    except Exception as e:
+        print(f"Warning: Failed to send photo: {e}", file=sys.stderr)
+        return False
+
+def main():
+    parser = argparse.ArgumentParser(description="Send Telegram notification.")
+    parser.add_argument("title", help="Message title/header")
+    parser.add_argument("body", nargs="?", default="", help="Message body")
+    parser.add_argument("--log-file", help="Path to log file to attach tail of")
+    parser.add_argument("--image-file", help="Path to image file to attach")
+    
+    args = parser.parse_args()
+
+    token = os.environ.get("TELEGRAM_BOT_TOKEN")
+    chat_id = os.environ.get("TELEGRAM_CHAT_ID")
+
+    if not token or not chat_id:
+        print("Warning: TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID not set. Skipping notification.", file=sys.stdout)
+        sys.exit(0)
+
+    # If image is provided, send it with title/body as caption (if short enough) 
+    # or send text first then image.
+    # Telegram caption limit is 1024 chars.
+    
+    if args.image_file:
+        caption = f"{args.title}\n{args.body}"
+        if len(caption) > 1000:
+            caption = args.title # Truncate to just title if too long
+            
+        success = send_telegram_photo(token, chat_id, args.image_file, caption)
+        if not success:
+             print("Failed to send image.")
+    else:
+        # Standard Text Message logic
+        message = f"*{args.title}*\n\n{args.body}"
+        
+        if args.log_file:
+            log_tail = tail_file(args.log_file)
+            log_tail = log_tail.replace("```", "'''") 
+            message += f"\n\n*Log Tail:*\n```\n{log_tail}\n```"
+
+        success = send_telegram_message(token, chat_id, message)
+        if not success:
+            # Fallback
+            print("Markdown send failed. Retrying with plain text...", file=sys.stderr)
+            payload = {
+                "chat_id": chat_id,
+                "text": message.replace("*", "").replace("`", "")
+            }
+            try:
+                url = f"https://api.telegram.org/bot{token}/sendMessage"
+                data = json.dumps(payload).encode("utf-8")
+                req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
+                with urllib.request.urlopen(req, timeout=10) as response:
+                    if response.status == 200:
+                        print("Sent as plain text fallback.", file=sys.stderr)
+            except Exception as e:
+                print(f"Fallback failed: {e}", file=sys.stderr)
+
 if __name__ == "__main__":
     main()

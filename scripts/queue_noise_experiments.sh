@@ -51,6 +51,21 @@ for config_file in "$CONFIG_DIR"/*.yaml; do
     if [ $EXIT_CODE -eq 0 ]; then
         echo "SUCCESS: $exp_id"
         notify "Exp Success ($COUNT/$TOTAL_EXPS)" "ID: $exp_id"
+        
+        # Run Visualization
+        echo "Generating Visualization for $exp_id..."
+        # Pass the output directory which implies experiment dir
+        # config output_dir is "outputs/noise_matrix", so exp dir is outputs/noise_matrix/exp_id ?
+        # Wait, train.py uses config['training']['output_dir'] / experiment_name
+        # In noise configs: output_dir="outputs/noise_matrix", experiment_name=exp_id
+        EXP_DIR="outputs/noise_matrix/$exp_id"
+        
+        if [ -d "$EXP_DIR" ]; then
+             python scripts/visualize_and_notify.py --experiment_dir "$EXP_DIR"
+        else
+             echo "Warning: Exp dir $EXP_DIR not found, skipping visualization."
+        fi
+        
     else
         echo "FAILURE: $exp_id. Check logs at $LOG_FILE"
         notify "Exp Failure ($COUNT/$TOTAL_EXPS)" "ID: $exp_id\nExit Code: $EXIT_CODE" --log-file "$LOG_FILE"

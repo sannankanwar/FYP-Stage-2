@@ -71,11 +71,40 @@ def main():
     
     if args.log_file:
         log_tail = tail_file(args.log_file)
+        # Escape backticks first to prevent code block breakage inside the block? No, code blocks handle most.
+        # But for stability, we just wrap in code block and hope. 
+        # Actually, Telegram Markdown Mode is strict. 
+        # Let's clean the log tail of characters that might break the JSON or Markdown structure if we are not careful.
+        # Simplest fix: Don't use Markdown for the log tail, use formatting.
+        # OR: Just escape "_" and "*" in the title/body if we use them.
+        
+        # Better approach: Use HTML parse_mode? Or just escape.
+        # Let's keep it simple: Escape the log tail content if it contains "```"
+        log_tail = log_tail.replace("```", "'''") 
         message += f"\n\n*Log Tail:*\n```\n{log_tail}\n```"
 
+    # Minimal escaping for the title and body if they contain * or _ being used non-syntactically? 
+    # The user provides them. Let's assume user provides plain text.
+    # We won't fully escape title/body to allow user to format, but log tail is raw.
+    
     success = send_telegram_message(token, chat_id, message)
     if not success:
-        print("Failed to send notification.")
+        # Fallback: Try sending without Markdown if specific formatting failed
+        print("Markdown send failed. Retrying with plain text...", file=sys.stderr)
+        payload = {
+            "chat_id": chat_id,
+            "text": message.replace("*", "").replace("`", ""), # Strip rough markdown
+            # No parse_mode means plain text
+        }
+        try:
+            url = f"https://api.telegram.org/bot{token}/sendMessage"
+            data = json.dumps(payload).encode("utf-8")
+            req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
+            with urllib.request.urlopen(req, timeout=10) as response:
+                if response.status == 200:
+                    print("Sent as plain text fallback.", file=sys.stderr)
+        except Exception as e:
+            print(f"Fallback failed: {e}", file=sys.stderr)
 
 if __name__ == "__main__":
     main()

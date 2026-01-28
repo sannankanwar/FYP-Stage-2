@@ -249,7 +249,7 @@ class OnTheFlyDataset(Dataset):
         self.S_range = tuple(config.get("S_range", [1.0, 40.0]))
         self.wavelength_range = tuple(config.get("wavelength_range", [0.4, 0.7]))
         self.focal_length_range = tuple(config.get("focal_length_range", [10.0, 100.0]))
-        self.focal_length_range = tuple(config.get("focal_length_range", [10.0, 100.0]))
+
         self.noise_std = config.get("noise_std", 0.0)
         
         # Initialize Noise Pipeline if enabled
@@ -287,7 +287,7 @@ class OnTheFlyDataset(Dataset):
             noise_std=self.noise_std
         )
         
-        )
+
         
         # Apply Noise Pipeline if enabled
         if self.pipeline:

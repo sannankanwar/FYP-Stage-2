@@ -238,12 +238,14 @@ class OnTheFlyDataset(Dataset):
     """
     Dataset that generates samples on the fly to avoid memory issues with large datasets.
     """
-    def __init__(self, config, length=1000):
+    def __init__(self, config, length=1000, sampler=None):
         self.config = config
         self.length = length
+        self.sampler = sampler
         
         # Extract params
         self.N = config.get("resolution", 256)
+        # ... (ranges) ...
         self.xc_range = tuple(config.get("xc_range", [-500.0, 500.0]))
         self.yc_range = tuple(config.get("yc_range", [-500.0, 500.0]))
         self.S_range = tuple(config.get("S_range", [1.0, 40.0]))
@@ -252,30 +254,40 @@ class OnTheFlyDataset(Dataset):
 
         self.noise_std = config.get("noise_std", 0.0)
         
-        # Initialize Noise Pipeline if enabled
-        # Check both simulation.apply_noise AND noise.enabled
+        # Initialize Noise Pipeline ... (same as before) ...
         sim_cfg = config.get("simulation", {}) if isinstance(config.get("simulation"), dict) else {}
-        apply_noise = sim_cfg.get("apply_noise", False) or config.get("apply_noise", False) # Fallback
+        apply_noise = sim_cfg.get("apply_noise", False) or config.get("apply_noise", False)
         noise_cfg = config.get("noise", {})
         
         self.pipeline = None
         if apply_noise and noise_cfg.get("enabled", False):
             if NOISE_PIPELINE_AVAILABLE:
-                print(f"Dataset: Initializing NoisePipeline with order {noise_cfg.get('pipeline_order')}")
                 self.pipeline = NoisePipeline(noise_cfg)
-            else:
-                print("WARNING: Noise enabled in config but src.noise.noise_pipeline not found.")
-        
+
     def __len__(self):
         return self.length
     
     def __getitem__(self, idx):
-        # Randomize parameters
-        xc = np.random.uniform(*self.xc_range)
-        yc = np.random.uniform(*self.yc_range)
-        S = np.random.uniform(*self.S_range)
-        wavelength = np.random.uniform(*self.wavelength_range)
-        focal_length = np.random.uniform(*self.focal_length_range)
+        # 1. Parameter Generation
+        if self.sampler is not None:
+             # Active Sampling
+             # We sample a batch of 1 and squeeze
+             params_tensor = self.sampler.sample_batch_params(1) # (1, 5)
+             p = params_tensor[0]
+             # Order: xc, yc, S, f, lambda (defined in sampler)
+             xc = p[0].item()
+             yc = p[1].item()
+             S = p[2].item()
+             focal_length = p[3].item()
+             wavelength = p[4].item()
+             
+        else:
+            # Random Uniform Sampling (Legacy)
+            xc = np.random.uniform(*self.xc_range)
+            yc = np.random.uniform(*self.yc_range)
+            S = np.random.uniform(*self.S_range)
+            wavelength = np.random.uniform(*self.wavelength_range)
+            focal_length = np.random.uniform(*self.focal_length_range)
         
         inp, tgt = generate_single_sample(
             N=self.N,

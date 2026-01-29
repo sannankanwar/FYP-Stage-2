@@ -1,0 +1,43 @@
+
+experiment_name: exp_active_01_adaboost
+description: "Direction B: Difficulty-Aware Active Sampling (AdaBoost style)"
+
+model:
+  name: fno_resnet18
+  output_dim: 5
+  input_channels: 2
+
+data:
+  # Sampler Params
+  sampler_alpha: 1.0
+  sampler_beta: 0.5
+  sampler_lambda: 0.05
+  
+  # Standard ranges
+  xc_range: [-100.0, 100.0]
+  yc_range: [-100.0, 100.0]
+  S_range: [5.0, 50.0]
+  focal_length_range: [10.0, 100.0]
+  wavelength_range: [0.4, 0.7]
+
+training:
+  epochs: 50
+  batch_size: 64
+  learning_rate: 0.001
+  optimizer: adamw
+  scheduler: plateau
+  experiment_name: exp_active_01_adaboost
+  output_dir: outputs/active_learning
+
+loss:
+  mode: coordinate # Use best loss from Exp9
+  
+train_samples: 2000
+val_samples: 200
+
+# Noise enabled? Assuming yes since we are fixing Exp9 problems
+noise:
+  enabled: true
+  pipeline_order: [sensor_grain, wrap_phase]
+  sensor_grain: {enabled: true, std_rad: 0.2}
+  wrap_phase: {enabled: true}

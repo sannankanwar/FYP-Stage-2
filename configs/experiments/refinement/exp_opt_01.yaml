@@ -1,0 +1,19 @@
+
+experiment_name: exp_opt_01_refiner
+description: "Direction A: Learned Optimizer (Refiner) on top of Exp9 Baseline"
+
+# Inherits Data/Noise config from Baseline at runtime, 
+# but we can override specific training params here.
+
+training:
+  epochs: 50
+  batch_size: 64
+  learning_rate: 0.001
+  optimizer: adamw
+  scheduler: plateau
+  experiment_name: exp_opt_01_refiner
+  output_dir: outputs/refinement
+
+# Data Overrides if needed (e.g. more samples for refinement)
+train_samples: 5000
+val_samples: 500

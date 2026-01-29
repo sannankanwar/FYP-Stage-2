@@ -38,7 +38,10 @@ class SpectralGating2d(nn.Module):
 
     def compl_mul2d(self, input, weights):
         # (batch, in_channel, x, y) -> (batch, in_channel, x, y)
-        return torch.einsum("bixy,ioxy->boxy", input, weights)
+        # AMP Fix: ComplexHalf is not supported for einsum/baddbmm on CUDA.
+        # We force execution in float32.
+        with torch.cuda.amp.autocast(enabled=False):
+            return torch.einsum("bixy,ioxy->boxy", input.cfloat(), weights.cfloat())
 
     def forward(self, x):
         batchsize = x.shape[0]

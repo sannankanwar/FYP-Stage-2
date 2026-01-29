@@ -7,6 +7,16 @@
 
 EXP9_CKPT="outputs/noise_matrix/exp_noisy_09_coordinate_loss/checkpoints/best_model.pth"
 
+# Load Environment Variables from .env
+if [ -f .env ]; then
+    echo "Loading environment variables from .env..."
+    set -a
+    source .env
+    set +a
+else
+    echo "WARNING: .env file not found. Ensure TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID are set."
+fi
+
 if [ ! -f "$EXP9_CKPT" ]; then
     echo "CRITICAL WARNING: Exp9 Baseline Checkpoint not found at $EXP9_CKPT"
     echo "Direction A (Refiner) will likely fail or use garbage weights."

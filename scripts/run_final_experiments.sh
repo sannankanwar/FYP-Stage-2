@@ -4,6 +4,14 @@
 echo "=== Starting Final Noise Experiments (100 Epochs, 2000 Samples) ==="
 date
 
+# Load Environment Variables from .env
+if [ -f .env ]; then
+    echo "Loading environment variables from .env..."
+    set -a
+    source .env
+    set +a
+fi
+
 # 1. GradFlow (The SOTA Baseline)
 echo "--- Starting Exp 06: GradFlow ---"
 python3 scripts/train.py --config configs/experiments/noise_matrix/exp_noisy_06_noise_gradflow.yaml

@@ -64,7 +64,8 @@ def main():
         train_dataset, 
         batch_size=full_config.get("batch_size", 32), 
         shuffle=True, 
-        num_workers=full_config.get("num_workers", 0)
+        num_workers=full_config.get("num_workers", 0),
+        pin_memory=True
     )
     
     # Val Dataset
@@ -74,7 +75,8 @@ def main():
         val_dataset,
         batch_size=full_config.get("batch_size", 32), 
         shuffle=False,
-        num_workers=full_config.get("num_workers", 0)
+        num_workers=full_config.get("num_workers", 0),
+        pin_memory=True
     )
     
     print(f"Initializing Model: {full_config.get('name')}...")

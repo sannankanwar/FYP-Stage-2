@@ -107,6 +107,12 @@ class Trainer:
             f.write(f"**Date**: {time.strftime('%Y-%m-%d %H:%M:%S')}\n\n")
             f.write(f"## Description\n{description}\n")
 
+        # AMP Scaler
+        self.use_amp = self.device.type == 'cuda'
+        self.scaler = torch.cuda.amp.GradScaler(enabled=self.use_amp)
+        if self.use_amp:
+            print("AMP (Automatic Mixed Precision) Enabled")
+
     def train(self):
         epochs = int(self.config.get("epochs", 10))
         log_interval = int(self.config.get("log_interval", 10))
@@ -191,20 +197,23 @@ class Trainer:
             data, target = data.to(self.device), target.to(self.device)
             
             self.optimizer.zero_grad()
-            output = self.model(data)
             
-            # Using CompositeLoss interface which handles everything
-            # Passing epoch for physics scheduling
-            # Passing data (images) for physics loss
-            loss, metrics = self.criterion(
-                pred_params=output, 
-                true_params=target, 
-                input_images=data,
-                epoch=epoch
-            )
+            with torch.cuda.amp.autocast(enabled=self.use_amp):
+                output = self.model(data)
                 
-            loss.backward()
-            self.optimizer.step()
+                # Using CompositeLoss interface which handles everything
+                # Passing epoch for physics scheduling
+                # Passing data (images) for physics loss
+                loss, metrics = self.criterion(
+                    pred_params=output, 
+                    true_params=target, 
+                    input_images=data,
+                    epoch=epoch
+                )
+                
+            self.scaler.scale(loss).backward()
+            self.scaler.step(self.optimizer)
+            self.scaler.update()
             
             total_loss += loss.item()
             

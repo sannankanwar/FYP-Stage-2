@@ -75,7 +75,7 @@ noise:
   wrap_phase:
     enabled: true
 training:
-  batch_size: 16
+  batch_size: 64
   epochs: 50
   experiment_name: exp_noisy_04_baseline_pinn
   learning_rate: 0.0001

@@ -1,0 +1,21 @@
+experiment_name: "exp_opt_02_gradflow"
+output_dir: "outputs_2"
+description: "Refiner with Gradient Flow Loss (Sensitively scaled 1/Range)"
+
+training:
+  epochs: 100
+  batch_size: 32
+  learning_rate: 1e-4
+  optimizer: "adam"
+  log_interval: 10
+  save_interval: 5
+  baseline_checkpoint: "outputs/noise_matrix/exp_noisy_09_coordinate_loss/checkpoints/best_model.pth"
+
+loss:
+  mode: "gradient_flow"
+  physics_enabled: false
+
+data:
+  resolution: 256
+  # Inherit params and generation settings from code default or loader
+  params: ['xc', 'yc', 'S', 'f', 'lambda']

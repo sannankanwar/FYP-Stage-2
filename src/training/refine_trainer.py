@@ -138,16 +138,88 @@ class RefiningTrainer(Trainer):
 
     def _compute_step(self, data, target):
         """
-        Computes loss for a batch.
+        Computes loss for a batch with support for multiple modes.
+        Modes: 'unit_standardized' (default), 'gradient_flow'.
+        Optional: Physics Loss.
         """
         theta_final = self._predict_batch(data)
         
-        # 7. Loss (Normalized MSE)
-        target_norm = self.normalize_params(target)
-        final_norm = self.normalize_params(theta_final)
+        loss_cfg = self.config.get("loss", {})
+        mode = loss_cfg.get("mode", "unit_standardized")
         
-        loss = nn.MSELoss()(final_norm, target_norm)
-        return loss
+        # --- Regression Loss ---
+        if mode == "gradient_flow":
+            # 1/Range Weighting
+            # theta_final and target are physical units
+            # Range is self.param_stds * sqrt(12)
+            # We want (pred - target)^2 / Range
+            
+            param_ranges = self.param_stds * np.sqrt(12)
+            diff_sq = (theta_final - target) ** 2
+            # Handle standard division (1/Range)
+            # weight = 1.0 / (param_ranges + 1e-8)
+            weighted_diff = diff_sq / (param_ranges.unsqueeze(0) + 1e-8)
+            reg_loss = weighted_diff.sum(dim=1).mean()
+            
+        else:
+            # Default: Unit Standardized (1/Range^2)
+            # Normalize first -> (val - mean) / std
+            # MSE(norm_pred, norm_target) is equivalent to (pred - target)^2 / std^2
+            # std = Range / sqrt(12), so ~ 12 * (pred - target)^2 / Range^2
+            
+            target_norm = self.normalize_params(target)
+            final_norm = self.normalize_params(theta_final)
+            reg_loss = nn.MSELoss()(final_norm, target_norm)
+
+        total_loss = reg_loss
+
+        # --- Physics Loss (Optional) ---
+        if loss_cfg.get("physics_enabled", False):
+            # Reconstruct Phase Map from Theta Final
+            # theta_final is (B, 5) -> xc, yc, S, f, lambda
+            
+            B, _, H, W = data.shape
+            
+            # Extract params
+            xc = theta_final[:, 0]
+            yc = theta_final[:, 1]
+            S_param = theta_final[:, 2]
+            f = theta_final[:, 3]
+            lam = theta_final[:, 4]
+            
+            # Grid construction (Same as in _predict_batch, reusing logic would be better but for speed copy-paste/optimize later)
+            # We can create a lightweight reconstructor helper if needed, but doing inline for now to avoid breaking imports
+            
+            y_lin = torch.linspace(-0.5, 0.5, H, device=self.device)
+            x_lin = torch.linspace(-0.5, 0.5, W, device=self.device)
+            mesh_y, mesh_x = torch.meshgrid(y_lin, x_lin, indexing='ij')
+            mesh_x = mesh_x.unsqueeze(0).expand(B, -1, -1)
+            mesh_y = mesh_y.unsqueeze(0).expand(B, -1, -1)
+            
+            X_grid = xc.view(B,1,1) + mesh_x * S_param.view(B,1,1)
+            Y_grid = yc.view(B,1,1) + mesh_y * S_param.view(B,1,1)
+            
+            k = 2.0 * torch.pi / lam.view(B,1,1)
+            R2 = X_grid**2 + Y_grid**2
+            
+            # Phase
+            phi = k * (torch.sqrt(R2 + f.view(B,1,1)**2) - f.view(B,1,1))
+            
+            recon_cos = torch.cos(phi).unsqueeze(1) # (B, 1, H, W)
+            recon_sin = torch.sin(phi).unsqueeze(1)
+            
+            recon_map = torch.cat([recon_cos, recon_sin], dim=1)
+            
+            # Input data is (B, 2, H, W) -> (cos, sin)
+            # Use only first 2 channels of input data (it might have 4 if recycled, but loader gives 2)
+            # data in _compute_step comes from loader, so it is (B, 2, H, W).
+            
+            phys_loss = nn.MSELoss()(recon_map, data[:, :2, :, :])
+            
+            weight = float(loss_cfg.get("physics_weight", 0.1))
+            total_loss = total_loss + weight * phys_loss
+
+        return total_loss
         
     def _train_epoch(self, epoch, loader, log_interval):
         self.model.train()

@@ -784,6 +784,24 @@ class NoisePipeline:
             }
         
         return current_phi, current_img2, step_outputs
+
+    def __call__(
+        self, 
+        phi: torch.Tensor, 
+        img2: Optional[torch.Tensor] = None
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Callable interface for the noise pipeline.
+        
+        Args:
+            phi: Wrapped phase tensor (B, H, W)
+            img2: Optional 2-channel representation (B, 2, H, W)
+            
+        Returns:
+            Tuple of (phi_out, img2_out)
+        """
+        phi_out, img2_out, _ = self.apply(phi, img2)
+        return phi_out, img2_out
     
     def apply_single_component(
         self, 

@@ -591,6 +591,82 @@ class CustomRegressionLoss(BaseLoss):
 
 
 # =============================================================================
+# Regression Loss: Coordinate Bias Loss (User Requested)
+# =============================================================================
+
+class CoordinateLoss(BaseLoss):
+    """
+    Coordinate-biased regression loss.
+    
+    Hard weights applied to specific parameters to prioritize their learning.
+    
+    Weights:
+        xc, yc, S : 5.0
+        f, lambda : 1.0 (or anything else)
+    
+    This is effectively a weighted UnitStandardizedParamLoss.
+    L_i = (pred_i - target_i)^2 * (weight_i / range_i)^2
+    """
+    
+    def __init__(
+        self,
+        predicted_params: list[str],
+        param_ranges: dict[str, tuple[float, float]],
+    ):
+        super().__init__(predicted_params, param_ranges)
+        
+        # Define weights
+        # Default all to 1.0
+        weights = torch.ones(self.num_params)
+        
+        # Apply 5.0 to prioritized params
+        priority_params = ["xc", "yc", "S"]
+        
+        for i, name in enumerate(predicted_params):
+            if name in priority_params:
+                weights[i] = 5.0
+        
+        self.register_buffer("weights", weights)
+    
+    def forward(
+        self,
+        pred_params: torch.Tensor,
+        true_params: torch.Tensor,
+        **kwargs,
+    ) -> tuple[torch.Tensor, dict]:
+        """
+        Compute coordinate-weighted loss (GradFlow variant).
+        
+        Formula:
+        L = Sum( (pred - target)^2 * Weight / Range )
+        """
+        self._validate_input_dims(pred_params, true_params)
+        
+        # Squared errors
+        squared_errors = (pred_params - true_params) ** 2
+        
+        # Scaling: 1 / Range (GradFlow style) instead of 1 / Range^2
+        inv_range = 1.0 / (self.range_magnitudes + 1e-8)  # (D,)
+        
+        # Base GradFlow term per parameter
+        base_term = squared_errors * inv_range
+        
+        # Apply prioritization weights
+        # weights: (D,) e.g. [5, 5, 5, 1, 1]
+        weighted_term = base_term * self.weights
+        
+        # Sum over params, mean over batch
+        loss = weighted_term.sum(dim=1).mean()
+        
+        return loss, {
+            "loss_regression": loss.item(),
+            "loss_coordinate": loss.item(),
+            "total_loss": loss.item(),
+            "predicted_params": self.predicted_params,
+        }
+
+
+# =============================================================================
 # Physics Loss: Phase Map MSE
 # =============================================================================
 
@@ -800,6 +876,13 @@ def build_loss(loss_cfg: dict, data_cfg: dict) -> nn.Module:
             predicted_params=predicted_params,
             param_ranges=param_ranges,
         )
+    
+    elif mode == "coordinate" or mode == "coordinate_loss":
+        regression_loss = CoordinateLoss(
+            predicted_params=predicted_params,
+            param_ranges=param_ranges,
+        )
+
     
     elif mode == "gradient_flow":
         phase_range = loss_cfg.get("phase_range", 2 * math.pi)

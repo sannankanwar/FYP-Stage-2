@@ -1,0 +1,27 @@
+# Phase 4 D06: FNO-UNet + SiLU
+experiment_name: "exp2_D06_unet_silu"
+description: "Activation sweep: FNO-UNet with SiLU activation (self-gated)."
+
+model:
+  name: "fno_unet"
+  output_dim: 5
+  modes: 32
+
+training:
+  epochs: 100
+  batch_size: 16
+  learning_rate: 0.001
+  optimizer: "adam"
+  scheduler: "plateau"
+  scheduler_patience: 15
+
+data:
+  resolution: 1024
+  train_samples: 2000
+  val_samples: 400
+
+grid_strategy: "random_all"
+standardize_outputs: true
+loss_function: "weighted_standardized"
+loss_weights: [1.0, 1.0, 1.0, 10.0, 10.0]
+activation: "silu"

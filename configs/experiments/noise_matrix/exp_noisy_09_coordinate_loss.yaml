@@ -29,7 +29,7 @@ data:
   - -100.0
   - 100.0
 loss:
-  mode: gradient_flow
+  mode: coordinate
   physics_enabled: false
   physics_start_epoch: 5
   physics_weight: 0.1
@@ -40,8 +40,8 @@ loss:
   - f
   - lambda
 meta:
-  description: 'Experiment: Gradient Flow Loss (Param-Space), With Noise'
-  name: exp_noisy_06_noise_gradflow
+  description: 'Experiment: Coordinate Loss (Weighted GradFlow 5x), With Noise'
+  name: exp_noisy_09_coordinate_loss
   version: '1.0'
 model:
   fno_activation: gelu
@@ -77,7 +77,7 @@ noise:
 training:
   batch_size: 64
   epochs: 100
-  experiment_name: exp_noisy_06_noise_gradflow
+  experiment_name: exp_noisy_09_coordinate_loss
   learning_rate: 0.0001
   log_interval: 10
   optimizer: adamw

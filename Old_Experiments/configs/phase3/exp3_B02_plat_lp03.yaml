@@ -1,0 +1,18 @@
+experiment_name: exp3_B02_plat_lp03
+description: 'Phase B: fno_unet plateau lambda_physics=0.3'
+model: {name: fno_unet, output_dim: 5, modes: 32}
+training:
+  epochs: 100
+  batch_size: 16
+  learning_rate: 0.001
+  optimizer: adam
+  scheduler: plateau
+  scheduler_patience: 10
+  scheduler_factor: 0.5
+  standardize_outputs: true
+  resolution: 1024
+  loss_function: weighted_physics
+  loss_weights: [1.0, 1.0, 1.0, 1.0, 1.0]
+  lambda_param: 1.0
+  lambda_physics: 0.3
+data: {grid_strategy: random_all, window_size: 100.0}

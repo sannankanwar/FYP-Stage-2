@@ -1,0 +1,25 @@
+# Phase 2 B03: FNO-ResNet18 + Adam + Cosine
+experiment_name: "exp2_B03_resnet18_adam_cosine"
+description: "Optimizer sweep: FNO-ResNet18 with Adam optimizer and Cosine Annealing."
+
+model:
+  name: "fno_resnet18"
+  output_dim: 5
+  modes: 32
+
+training:
+  epochs: 100
+  batch_size: 32
+  learning_rate: 0.001
+  optimizer: "adam"
+  scheduler: "cosine"
+
+data:
+  resolution: 1024
+  train_samples: 2000
+  val_samples: 400
+
+grid_strategy: "random_all"
+standardize_outputs: true
+loss_function: "weighted_standardized"
+loss_weights: [1.0, 1.0, 1.0, 10.0, 10.0]

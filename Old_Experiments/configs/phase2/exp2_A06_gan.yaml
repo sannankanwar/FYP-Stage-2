@@ -1,0 +1,24 @@
+# Phase 1 A06: GAN Inverter Baseline
+experiment_name: "exp2_A06_gan"
+description: "Architecture comparison: GAN Inverter - CNN encoder with adversarial training potential."
+
+model:
+  name: "gan_inverter"
+  output_dim: 5
+
+training:
+  epochs: 100
+  batch_size: 32
+  learning_rate: 0.0002
+  optimizer: "adam"
+  scheduler: null
+
+data:
+  resolution: 1024
+  train_samples: 2000
+  val_samples: 400
+
+grid_strategy: "random_all"
+standardize_outputs: true
+loss_function: "weighted_standardized"
+loss_weights: [1.0, 1.0, 1.0, 10.0, 10.0]

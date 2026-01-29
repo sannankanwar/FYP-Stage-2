@@ -1,0 +1,18 @@
+experiment_name: exp4_A01_fno_resnet18
+description: 'Phase A: FNO-ResNet18'
+model: {name: fno_resnet18, output_dim: 5, modes: 32}
+training:
+  epochs: 25
+  batch_size: 16
+  learning_rate: 0.001
+  optimizer: adam
+  scheduler: plateau
+  scheduler_patience: 2
+  scheduler_factor: 0.5
+  standardize_outputs: false
+  resolution: 1024
+  loss_function: raw_physics
+  loss_weights: [1.0, 1.0, 1.0, 1.0, 1.0]
+  lambda_param: 1.0
+  lambda_physics: 0.5
+data: {grid_strategy: random_all, window_size: 100.0}

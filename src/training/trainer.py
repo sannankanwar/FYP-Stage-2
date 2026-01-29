@@ -174,9 +174,13 @@ class Trainer:
                      f.write("epoch,train_loss,val_loss,time\n")
                 f.write(f"{epoch+1},{train_loss},{val_loss},{epoch_time}\n")
             
-            # Snapshot Logic (Every 5 Epochs)
+            # Snapshot Logic (Every 20 Epochs for Telegram, Every 5 for disk)
             if (epoch + 1) % 5 == 0 and self.val_loader:
                 self._save_snapshot(epoch)
+
+            # Telegram Notification (Every 20 Epochs)
+            if (epoch + 1) % 20 == 0:
+                 self._send_telegram_update(epoch, val_loss)
             
             # Save History to CSV
             history_path = os.path.join(self.experiment_dir, "history.csv")
@@ -310,6 +314,67 @@ class Trainer:
             'config': self.config
         }
         torch.save(checkpoint, path)
+
+    def _generate_loss_plot(self, epoch, save_path):
+        """Generates a simple loss curve from history.csv"""
+        history_path = os.path.join(self.experiment_dir, "history.csv")
+        if not os.path.exists(history_path):
+            return False
+        
+        try:
+            # Read CSV manually to avoid pandas dependency inside training loop if possible, but pandas is safer
+            import pandas as pd
+            df = pd.read_csv(history_path)
+            
+            plt.figure(figsize=(10, 6))
+            plt.plot(df['epoch'], df['train_loss'], label='Train Loss')
+            plt.plot(df['epoch'], df['val_loss'], label='Val Loss')
+            plt.xlabel('Epoch')
+            plt.ylabel('Loss')
+            plt.title(f'Loss Curve (Epoch {epoch+1})')
+            plt.legend()
+            plt.grid(True)
+            plt.savefig(save_path)
+            plt.close()
+            return True
+        except Exception as e:
+            print(f"Failed to generate loss plot: {e}")
+            return False
+
+    def _send_telegram_update(self, epoch, val_loss):
+        """Sends Telegram notification with plots and stats."""
+        print(f"Sending Telegram Update for Epoch {epoch+1}...")
+        
+        # 1. Prepare Text
+        exp_name = self.config.get("experiment_name", "experiment")
+        title = f"Training Update: {exp_name}"
+        body = f"Epoch: {epoch+1}\nVal Loss: {val_loss:.4f}\n"
+        
+        # 2. Paths to Artifacts
+        snapshot_dir = os.path.join(self.snapshot_dir, f"epoch_{epoch+1}")
+        scatter_plot_path = os.path.join(snapshot_dir, "scatter_plots.png")
+        loss_plot_path = os.path.join(snapshot_dir, "loss_curve.png")
+        
+        # Generator Loss Plot
+        self._generate_loss_plot(epoch, loss_plot_path)
+        
+        # 3. Send using scripts/notify.py via subprocess
+        import subprocess
+        
+        # Send Text + Loss Plot (if available)
+        cmd = ["python3", "scripts/notify.py", title, body]
+        if os.path.exists(loss_plot_path):
+            cmd.extend(["--image-file", loss_plot_path])
+        
+        subprocess.run(cmd)
+        
+        # Send Scatter Plot (secondary message) if exists
+        if os.path.exists(scatter_plot_path):
+             subprocess.run([
+                 "python3", "scripts/notify.py", 
+                 f"{exp_name} Scatter", "Scatter Plots", 
+                 "--image-file", scatter_plot_path
+             ])
 
     def _plot_residual_phase(self, save_dir, epoch):
         """

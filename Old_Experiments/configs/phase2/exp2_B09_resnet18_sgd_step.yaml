@@ -1,0 +1,28 @@
+# Phase 2 B09: FNO-ResNet18 + SGD + Step
+experiment_name: "exp2_B09_resnet18_sgd_step"
+description: "Optimizer sweep: FNO-ResNet18 with SGD momentum and Step LR decay."
+
+model:
+  name: "fno_resnet18"
+  output_dim: 5
+  modes: 32
+
+training:
+  epochs: 100
+  batch_size: 32
+  learning_rate: 0.01
+  optimizer: "sgd"
+  momentum: 0.9
+  scheduler: "step"
+  step_size: 50
+  gamma: 0.5
+
+data:
+  resolution: 1024
+  train_samples: 2000
+  val_samples: 400
+
+grid_strategy: "random_all"
+standardize_outputs: true
+loss_function: "weighted_standardized"
+loss_weights: [1.0, 1.0, 1.0, 10.0, 10.0]

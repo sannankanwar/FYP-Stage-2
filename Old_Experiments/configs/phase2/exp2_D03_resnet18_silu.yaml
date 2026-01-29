@@ -1,0 +1,27 @@
+# Phase 4 D03: FNO-ResNet18 + SiLU
+experiment_name: "exp2_D03_resnet18_silu"
+description: "Activation sweep: FNO-ResNet18 with SiLU activation (self-gated)."
+
+model:
+  name: "fno_resnet18"
+  output_dim: 5
+  modes: 32
+
+training:
+  epochs: 100
+  batch_size: 32
+  learning_rate: 0.001
+  optimizer: "adam"
+  scheduler: "plateau"
+  scheduler_patience: 15
+
+data:
+  resolution: 1024
+  train_samples: 2000
+  val_samples: 400
+
+grid_strategy: "random_all"
+standardize_outputs: true
+loss_function: "weighted_standardized"
+loss_weights: [1.0, 1.0, 1.0, 10.0, 10.0]
+activation: "silu"

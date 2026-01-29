@@ -1,0 +1,26 @@
+# Phase 2 B02: FNO-UNet + Adam + Plateau
+experiment_name: "exp2_B02_unet_adam_plateau"
+description: "Optimizer sweep: FNO-UNet with Adam optimizer and Plateau scheduler."
+
+model:
+  name: "fno_unet"
+  output_dim: 5
+  modes: 32
+
+training:
+  epochs: 100
+  batch_size: 16
+  learning_rate: 0.001
+  optimizer: "adam"
+  scheduler: "plateau"
+  scheduler_patience: 15
+
+data:
+  resolution: 1024
+  train_samples: 2000
+  val_samples: 400
+
+grid_strategy: "random_all"
+standardize_outputs: true
+loss_function: "weighted_standardized"
+loss_weights: [1.0, 1.0, 1.0, 10.0, 10.0]

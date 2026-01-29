@@ -1,0 +1,31 @@
+# Phase 5 E02: Best Config Validation - Placeholder for best Swin model
+experiment_name: "exp2_E02_best_swin"
+description: "Final validation: Best Swin configuration with full evaluation."
+
+model:
+  name: "swin"
+  output_dim: 5
+  embed_dim: 96
+  depths: [2, 2, 6, 2]
+  num_heads: [3, 6, 12, 24]
+  window_size: 8
+  patch_size: 4
+
+training:
+  epochs: 250
+  batch_size: 16
+  learning_rate: 0.0001
+  optimizer: "adam"
+  scheduler: "cosine"
+  save_every: 10
+
+data:
+  resolution: 1024
+  train_samples: 4000
+  val_samples: 1000
+
+grid_strategy: "random_all"
+standardize_outputs: true
+loss_function: "weighted_standardized"
+loss_weights: [1.0, 1.0, 1.0, 10.0, 10.0]
+activation: "gelu"

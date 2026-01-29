@@ -1,0 +1,28 @@
+# Phase 3 C06: FNO-UNet + Physics Lambda=0.5
+experiment_name: "exp2_C06_unet_physics_05"
+description: "Physics loss ablation: FNO-UNet with physics loss lambda=0.5."
+
+model:
+  name: "fno_unet"
+  output_dim: 5
+  modes: 32
+
+training:
+  epochs: 100
+  batch_size: 16
+  learning_rate: 0.001
+  optimizer: "adam"
+  scheduler: "plateau"
+  scheduler_patience: 15
+
+data:
+  resolution: 1024
+  train_samples: 2000
+  val_samples: 400
+
+grid_strategy: "random_all"
+standardize_outputs: true
+loss_function: "weighted_physics"
+loss_weights: [1.0, 1.0, 1.0, 10.0, 10.0]
+lambda_param: 1.0
+lambda_physics: 0.5

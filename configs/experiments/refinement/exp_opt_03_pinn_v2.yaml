@@ -1,0 +1,22 @@
+experiment_name: "exp03_PINN"
+output_dir: "outputs/optimizer"
+description: "Refiner with Physics Consistency Loss (PINN Term) - 300 Epochs"
+
+training:
+  epochs: 300
+  batch_size: 32
+  learning_rate: 1e-4
+  optimizer: "adam"
+  log_interval: 10
+  save_interval: 5
+  # Fallback
+  baseline_checkpoint: "outputs/noise_matrix/exp_noisy_09_v2_150ep/checkpoints/best_model.pth"
+
+loss:
+  mode: "unit_standardized" 
+  physics_enabled: true
+  physics_weight: 0.1
+
+data:
+  resolution: 256
+  params: ['xc', 'yc', 'S', 'f', 'lambda']

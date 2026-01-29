@@ -48,7 +48,11 @@ def main():
     def notify(title, body):
         print(f"Notification: {title} - {body}")
         if token and chat_id:
-            send_telegram_message(token, chat_id, f"*{title}*\n\n{body}")
+            # Escape underscores for Markdown to prevent broken formatting
+            # Telegram Markdown V1 uses underscores for italics.
+            safe_title = title.replace("_", "\\_")
+            safe_body = body.replace("_", "\\_")
+            send_telegram_message(token, chat_id, f"*{safe_title}*\n\n{safe_body}")
 
     experiment_name = full_config.get("experiment_name", "Refiner")
     notify(f"Refiner Training STARTED: {experiment_name}", f"Config: {args.config}")

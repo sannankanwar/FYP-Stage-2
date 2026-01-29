@@ -6,7 +6,7 @@ description: "Direction A: Learned Optimizer (Refiner) on top of Exp9 Baseline"
 # but we can override specific training params here.
 
 training:
-  epochs: 50
+  epochs: 100
   batch_size: 64
   learning_rate: 0.001
   optimizer: adamw

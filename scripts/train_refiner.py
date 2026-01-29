@@ -113,9 +113,12 @@ def main():
     # Output dim = 5 (deltas)
     refiner = ResNetRefiner(input_channels=4, condition_dim=5, output_dim=5)
     
+    # Flatten Config so Trainer can find 'epochs' at top level
+    full_config_flat = flatten_config(full_config)
+
     # 5. Training
     print("Starting Refiner Training...")
-    trainer = RefiningTrainer(full_config, baseline_model, refiner, train_loader, val_loader)
+    trainer = RefiningTrainer(full_config_flat, baseline_model, refiner, train_loader, val_loader)
     trainer.train()
 
 if __name__ == "__main__":

@@ -19,6 +19,8 @@ def main():
     parser.add_argument("--config", type=str, required=True, help="Refinement experiment config")
     parser.add_argument("--baseline-config", type=str, required=True, help="Config of the baseline model (Exp9)")
     parser.add_argument("--baseline-checkpoint", type=str, required=True, help="Path to frozen baseline weights")
+    parser.add_argument("--resume", type=str, help="Path to Refiner checkpoint to resume")
+    parser.add_argument("--epochs", type=int, help="Override total number of epochs")
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
     
@@ -85,7 +87,7 @@ def main():
             if 'training' in cfg and isinstance(cfg['training'], dict):
                 flat.update(cfg['training'])
             return flat
-    
+
         # Try to load config from checkpoint
         if 'config' in ckpt:
             print("Using configuration found in checkpoint for Baseline Model.")
@@ -93,7 +95,7 @@ def main():
         else:
             print("WARNING: No config in checkpoint, using provided YAML config.")
             baseline_model_config = flatten_config(baseline_config_raw)
-    
+
         # Initialize Model with CORRECT config
         # Now that it is flattened, resolution=1024 will be visible, triggering Downsampler (16ch).
         baseline_model = get_model(baseline_model_config)
@@ -139,13 +141,47 @@ def main():
         # Condition dim = 5 (xc, yc, S, f, lambda)
         # Output dim = 5 (deltas)
         refiner = ResNetRefiner(input_channels=4, condition_dim=5, output_dim=5)
+
+        # Resume Logic (Model Weights)
+        refiner_ckpt = None
+        if args.resume:
+            print(f"Loading Refiner checkpoint from {args.resume}...")
+            if not os.path.exists(args.resume):
+                raise FileNotFoundError(f"Resume checkpoint not found: {args.resume}")
+            # Load with weights_only=False to allow full pickle (safe here as it's user's code)
+            refiner_ckpt = torch.load(args.resume, map_location='cpu') # weights_only=True default in future PyTorch
+            refiner.load_state_dict(refiner_ckpt['model_state_dict'])
+            print("Refiner weights loaded.")
         
         # Flatten Config so Trainer can find 'epochs' at top level
         full_config_flat = flatten_config(full_config)
-    
+        
+        # Override Epochs if requested (e.g. for continuation)
+        if args.epochs:
+            print(f"Overriding epochs: {full_config_flat.get('epochs')} -> {args.epochs}")
+            full_config_flat['epochs'] = args.epochs
+
         # 5. Training
         print("Starting Refiner Training...")
         trainer = RefiningTrainer(full_config_flat, baseline_model, refiner, train_loader, val_loader)
+        
+        # Resume Logic (Optimizer & Scheduled Epoch)
+        if refiner_ckpt:
+            if 'optimizer_state_dict' in refiner_ckpt:
+                print("Loading Optimizer State...")
+                try:
+                    trainer.optimizer.load_state_dict(refiner_ckpt['optimizer_state_dict'])
+                except Exception as e:
+                    print(f"WARNING: Failed to load optimizer state: {e}. continuing with fresh optimizer.")
+            
+            if 'epoch' in refiner_ckpt:
+                start_ep = refiner_ckpt['epoch'] + 1
+                if start_ep < full_config_flat.get('epochs', 100):
+                     print(f"Resuming from Epoch {start_ep}")
+                     trainer.start_epoch = start_ep
+                else:
+                     print(f"Checkpoint at epoch {start_ep} is already >= target epochs.")
+                
         trainer.train()
         
         notify(f"Refiner Training COMPLETED: {experiment_name}", "Process finished successfully.")

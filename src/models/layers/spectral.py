@@ -27,14 +27,21 @@ class SpectralGating2d(nn.Module):
         self.scale = (1 / in_channels)
         
         # Learnable complex weights
+        # Learnable complex weights
         # We only learn the lower frequency modes (low-pass filtering inductive bias)
         # Shape: [in, out, modes1, modes2]
-        self.weights1 = nn.Parameter(
-            self.scale * torch.randn(in_channels, out_channels, self.modes1, self.modes2, dtype=torch.cfloat)
-        )
-        self.weights2 = nn.Parameter(
-            self.scale * torch.randn(in_channels, out_channels, self.modes1, self.modes2, dtype=torch.cfloat)
-        )
+        # AMP Fix 2: Split into Real and Imaginary parts (Float32) to satisfy GradScaler
+        
+        scale_val = self.scale
+        # Weights 1
+        w1_init = scale_val * torch.randn(in_channels, out_channels, self.modes1, self.modes2, dtype=torch.cfloat)
+        self.weights1_real = nn.Parameter(w1_init.real.float())
+        self.weights1_imag = nn.Parameter(w1_init.imag.float())
+
+        # Weights 2
+        w2_init = scale_val * torch.randn(in_channels, out_channels, self.modes1, self.modes2, dtype=torch.cfloat)
+        self.weights2_real = nn.Parameter(w2_init.real.float())
+        self.weights2_imag = nn.Parameter(w2_init.imag.float())
 
     def compl_mul2d(self, input, weights):
         # (batch, in_channel, x, y) -> (batch, in_channel, x, y)
@@ -62,13 +69,17 @@ class SpectralGating2d(nn.Module):
         m1 = min(self.modes1, x_ft.size(-2) // 2)
         m2 = min(self.modes2, x_ft.size(-1))
         
+        # Reconstruct weights from Real/Imag parts
+        weights1 = torch.complex(self.weights1_real, self.weights1_imag)
+        weights2 = torch.complex(self.weights2_real, self.weights2_imag)
+        
         # Upper-Left corner (Low freqs in H, Low freqs in W)
         out_ft[:, :, :m1, :m2] = \
-            self.compl_mul2d(x_ft[:, :, :m1, :m2], self.weights1[:, :, :m1, :m2])
+            self.compl_mul2d(x_ft[:, :, :m1, :m2], weights1[:, :, :m1, :m2])
             
         # Lower-Left corner (High freqs in H - aliased negative, Low freqs in W)
         out_ft[:, :, -m1:, :m2] = \
-            self.compl_mul2d(x_ft[:, :, -m1:, :m2], self.weights2[:, :, :m1, :m2])
+            self.compl_mul2d(x_ft[:, :, -m1:, :m2], weights2[:, :, :m1, :m2])
 
         # 3. IFFT
         x = torch.fft.irfft2(out_ft, s=(x.size(-2), x.size(-1)))

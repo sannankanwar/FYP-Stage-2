@@ -220,6 +220,7 @@ def main():
     # Save CSV of params
     df = pd.DataFrame([best_params], columns=['xc', 'yc', 'S', 'wl', 'f'])
     df['cost'] = result.fun
+    df['time_seconds'] = elapsed
     df.to_csv(os.path.join(out_dir, 'solution.csv'), index=False)
     
     # Visualization

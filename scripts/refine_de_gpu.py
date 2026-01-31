@@ -102,15 +102,27 @@ GLOBAL_N = 128
 
 def objective_function_vectorized(x):
     """
-    SciPy wrapper.
-    x shape is (NumParams, PopSize) coming from SciPy if vectorized=True.
-    We need to transpose it to (PopSize, NumParams) for PyTorch.
+    SciPy wrapper handling both Vectorized DE (Batch) and L-BFGS-B Polish (Single).
+    x shape is (5, PopSize) for DE, or (5,) for Polish.
     """
-    # Transpose: (5, Pop) -> (Pop, 5)
-    params = torch.tensor(x.T, dtype=torch.float32, device=device)
+    # Check if batch (DE) or single (Polish)
+    if x.ndim == 1:
+        # Single vector (5,) -> Reshape to (1, 5)
+        x_input = x[np.newaxis, :]
+        is_single = True
+    else:
+        # Batch (5, Pop) -> Transpose to (Pop, 5)
+        x_input = x.T
+        is_single = False
+        
+    params = torch.tensor(x_input, dtype=torch.float32, device=device)
     
     # We don't have 'fixed_lambda' because we are optimizing it (param 3)
-    return batch_forward_model(params, GLOBAL_N, None, GLOBAL_TARGET_TENSOR)
+    costs = batch_forward_model(params, GLOBAL_N, None, GLOBAL_TARGET_TENSOR)
+    
+    if is_single:
+        return float(costs[0])
+    return costs
 
 
 def main():

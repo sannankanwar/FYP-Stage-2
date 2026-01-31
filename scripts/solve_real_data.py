@@ -27,13 +27,26 @@ GLOBAL_N = 1024 # Target resolution after crop
 
 def objective_function_vectorized(x):
     """
-    SciPy wrapper.
+    SciPy wrapper handling both Vectorized DE (Batch) and L-BFGS-B Polish (Single).
     """
-    # Transpose: (5, Pop) -> (Pop, 5)
-    params = torch.tensor(x.T, dtype=torch.float32, device=device)
+    # Check if batch (DE) or single (Polish)
+    if x.ndim == 1:
+        # Single vector (5,) -> Reshape to (1, 5)
+        x_input = x[np.newaxis, :]
+        is_single = True
+    else:
+        # Batch (5, Pop) -> Transpose to (Pop, 5)
+        x_input = x.T
+        is_single = False
+        
+    params = torch.tensor(x_input, dtype=torch.float32, device=device)
     
     # We optimize 5 parameters: [xc, yc, S, wl, f]
-    return batch_forward_model(params, GLOBAL_N, None, GLOBAL_TARGET_TENSOR)
+    costs = batch_forward_model(params, GLOBAL_N, None, GLOBAL_TARGET_TENSOR)
+    
+    if is_single:
+        return float(costs[0]) # Return float for minimize
+    return costs # Return array for differential_evolution
 
 def load_and_process_csv(filepath, target_size=1024):
     """

@@ -83,7 +83,7 @@ def main():
     parser.add_argument("--input_file", type=str, required=True, help="Path to CSV file")
     parser.add_argument("--checkpoint", type=str, required=True, help="Exp9 Checkpoint")
     parser.add_argument("--config", type=str, help="Config path")
-    parser.add_argument("--output_dir", type=str, default="outputs/real_data_solutions")
+    parser.add_argument("--output_dir", type=str, default="outputs/real_data_solutions_2")
     parser.add_argument("--pop_size", type=int, default=50)
     parser.add_argument("--max_iter", type=int, default=250)
     parser.add_argument("--crop_size", type=int, default=1024)

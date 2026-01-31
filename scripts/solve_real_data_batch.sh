@@ -6,7 +6,7 @@ set -u
 
 CHECKPOINT=${1:-"outputs/test/dry_run_coord_gfx/checkpoints/best_model.pth"}
 INPUT_DIR="real_data"
-OUTPUT_DIR="outputs/real_data_solutions"
+OUTPUT_DIR="outputs/real_data_solutions_2"
 
 mkdir -p "$OUTPUT_DIR"
 

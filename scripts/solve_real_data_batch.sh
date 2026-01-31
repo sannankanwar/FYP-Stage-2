@@ -32,7 +32,7 @@ for file in "$INPUT_DIR"/*.csv; do
             --checkpoint "$CHECKPOINT" \
             --output_dir "$OUTPUT_DIR" \
             --pop_size 50 \
-            --max_iter 100 \
+            --max_iter 250 \
             --crop_size 1024
             
     fi

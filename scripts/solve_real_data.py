@@ -85,7 +85,7 @@ def main():
     parser.add_argument("--config", type=str, help="Config path")
     parser.add_argument("--output_dir", type=str, default="outputs/real_data_solutions")
     parser.add_argument("--pop_size", type=int, default=50)
-    parser.add_argument("--max_iter", type=int, default=100)
+    parser.add_argument("--max_iter", type=int, default=250)
     parser.add_argument("--crop_size", type=int, default=1024)
     args = parser.parse_args()
 
@@ -211,7 +211,8 @@ def main():
     )
     
     end_time = time.time()
-    print(f"Completed in {end_time - start_time:.2f}s. Cost: {result.fun:.5f}")
+    elapsed = end_time - start_time
+    print(f"[{filename}] Completed in {elapsed:.2f}s. Cost: {result.fun:.5f}")
     
     # 6. Save Results
     best_params = result.x

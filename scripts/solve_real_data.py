@@ -160,35 +160,48 @@ def main():
     print(f"Initial Prediction: {pred_params}")
     # [xc, yc, S, wl, f]
     
-    # 4. Bounds (Relaxed)
+    # 4. Bounds (Relaxed and Widened for Real Data)
+    # The prediction might be out of distribution (e.g. if model trained on S<40 but real crop is S=100)
+    # We must allow the optimizer to explore a much larger space.
+    
     bounds = [
-        (pred_params[0]-200, pred_params[0]+200), # xc (Larger search for real data)
-        (pred_params[1]-200, pred_params[1]+200), # yc
-        (pred_params[2]*0.5, pred_params[2]*1.5), # Scale (Could be very different)
-        (0.4, 0.8),                                # Wavelength (Physics constrained 400-800nm)
-        (10.0, 200.0)                              # Focal Length
+        (pred_params[0]-500, pred_params[0]+500), # xc (Allow large shift)
+        (pred_params[1]-500, pred_params[1]+500), # yc
+        (10.0, 500.0),                             # S (Scale/FOV). 1024 pixels could be 10um or 500um.
+        (0.4, 0.7),                                # Wavelength (Physics constrained 400-700nm)
+        (10.0, 500.0)                              # Focal Length
     ]
+    
+    print(f"Bounds: {bounds}")
     
     # 5. Run DE
     start_time = time.time()
     
-    # Init population around prediction
+    # Init population around prediction (but variance must be high enough to match bounds)
     n_params = 5
     total_pop = args.pop_size * n_params
     init_pop = np.zeros((total_pop, n_params))
+    
+    # Random init within FULL bounds
     for i in range(n_params):
         low, high = bounds[i]
         init_pop[:, i] = np.random.uniform(low, high, total_pop)
+        
+    # Inject Prediction
     init_pop[0] = pred_params
+    
+    # Strategy: 'best1bin' is greedy. 'rand1bin' explores more. 
+    # Tol: set extremely low to prevent early stop.
     
     result = differential_evolution(
         objective_function_vectorized,
         bounds,
-        strategy='best1bin',
+        strategy='best1bin', # or rand1bin
         maxiter=args.max_iter,
         popsize=args.pop_size,
-        tol=0.01,
-        mutation=(0.5, 1),
+        tol=1e-6,        # Force continue
+        atol=1e-6,       # Force continue
+        mutation=(0.5, 1.0),
         recombination=0.7,
         vectorized=True,
         workers=1,
